@@ -1,0 +1,19 @@
+{
+  "name": "Finance Tracker",
+  "short_name": "Tracker",
+  "description": "Personal finance tracker — encrypted, offline-ready",
+  "start_url": "https://vladimirjaksicmck.github.io/finance-tracker/finance-tracker.html",
+  "scope": "https://vladimirjaksicmck.github.io/finance-tracker/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#1D9E75",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

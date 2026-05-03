@@ -1,0 +1,2423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Finance Tracker</title>
+<!-- PWA manifest -->
+<link rel="manifest" href="./manifest.json">
+<!-- Apple PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Finance Tracker">
+<link rel="apple-touch-icon" href="icon.svg">
+<!-- Theme colour (Android / Safari tab bar) -->
+<meta name="theme-color" content="#1D9E75">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #f0f2f5; --surface: #fff; --surface2: #f8f9fa; --border: #e0e0e0;
+  --text: #1a1a2e; --text2: #555; --primary: #4f46e5; --primary-h: #4338ca;
+  --income: #10b981; --expense: #ef4444; --warning: #f59e0b;
+  --radius: 10px; --shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.dark {
+  --bg: #0f172a; --surface: #1e293b; --surface2: #273548; --border: #334155;
+  --text: #e2e8f0; --text2: #94a3b8; --shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;transition:background .3s,color .3s}
+/* Lock screen */
+#lockScreen{position:fixed;inset:0;background:linear-gradient(135deg,#1e1b4b,#312e81);display:flex;align-items:center;justify-content:center;z-index:9999}
+.lock-box{background:#fff;border-radius:20px;padding:40px;width:360px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4)}
+.lock-box h1{font-size:1.6rem;margin-bottom:6px;color:#1a1a2e}
+.lock-box p{color:#666;font-size:.9rem;margin-bottom:24px}
+.lock-logo{font-size:3rem;margin-bottom:16px}
+.pw-wrap{position:relative;margin-bottom:12px}
+.pw-wrap input{width:100%;padding:12px 44px 12px 14px;border:2px solid #e0e0e0;border-radius:8px;font-size:1rem;outline:none;transition:border .2s}
+.pw-wrap input:focus{border-color:#4f46e5}
+.eye-btn{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#888;padding:4px}
+.criteria{text-align:left;margin:10px 0;font-size:.82rem}
+.criteria div{display:flex;align-items:center;gap:6px;padding:2px 0}
+.criteria .ok{color:#10b981} .criteria .fail{color:#ef4444}
+.btn{display:inline-block;padding:12px 24px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:1rem;cursor:pointer;width:100%;transition:background .2s}
+.btn:hover{background:var(--primary-h)}
+.btn-sm{padding:7px 14px;font-size:.85rem;width:auto}
+.btn-outline{background:transparent;border:2px solid var(--primary);color:var(--primary)}
+.btn-outline:hover{background:var(--primary);color:#fff}
+.btn-danger{background:#ef4444} .btn-danger:hover{background:#dc2626}
+.btn-success{background:#10b981} .btn-success:hover{background:#059669}
+.lock-err{color:#ef4444;font-size:.85rem;margin-top:8px;min-height:20px}
+.setup-link{color:#4f46e5;cursor:pointer;font-size:.85rem;text-decoration:underline;margin-top:10px;display:inline-block}
+/* App shell */
+#app{display:none;flex-direction:column;min-height:100vh}
+header{background:var(--primary);color:#fff;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+header h1{font-size:1.2rem;font-weight:700}
+.header-btns{display:flex;gap:8px;align-items:center}
+.icon-btn{background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:.85rem;display:flex;align-items:center;gap:5px;transition:background .2s}
+.icon-btn:hover{background:rgba(255,255,255,.3)}
+/* Summary cards */
+.summary-strip{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border)}
+@media(max-width:900px){.summary-strip{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:500px){.summary-strip{grid-template-columns:repeat(2,1fr)}}
+.metric-card{background:var(--surface2);border-radius:var(--radius);padding:10px 12px;text-align:center}
+.metric-card .label{font-size:.72rem;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
+.metric-card .value{font-size:1rem;font-weight:700;margin-top:3px}
+.metric-card .value.inc{color:var(--income)} .metric-card .value.exp{color:var(--expense)}
+/* Nav tabs */
+.tab-nav{display:flex;overflow-x:auto;background:var(--surface);border-bottom:2px solid var(--border);padding:0 8px;scrollbar-width:none}
+.tab-nav::-webkit-scrollbar{display:none}
+.tab-btn{padding:12px 16px;border:none;background:none;color:var(--text2);cursor:pointer;font-size:.85rem;white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .2s}
+.tab-btn.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+/* Tab content */
+.tab-content{display:none;padding:16px;flex:1}
+.tab-content.active{display:block}
+/* Forms */
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:.85rem;font-weight:600;margin-bottom:5px;color:var(--text2)}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:.95rem;background:var(--surface);color:var(--text);outline:none;transition:border .2s}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--primary)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:480px){.form-row{grid-template-columns:1fr}}
+/* Cards */
+.card{background:var(--surface);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
+.card-title{font-size:1rem;font-weight:700;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+/* Quick capture numpad */
+.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:280px;margin:0 auto}
+.num-btn{padding:18px;font-size:1.3rem;border:1.5px solid var(--border);background:var(--surface);color:var(--text);border-radius:10px;cursor:pointer;font-weight:600;transition:background .15s}
+.num-btn:hover{background:var(--primary);color:#fff}
+.amount-display{font-size:2.5rem;font-weight:700;text-align:center;padding:16px;background:var(--surface2);border-radius:10px;margin-bottom:12px;min-height:70px;letter-spacing:2px}
+.type-toggle{display:flex;border-radius:8px;overflow:hidden;border:1.5px solid var(--border);margin-bottom:12px}
+.type-btn{flex:1;padding:10px;border:none;background:var(--surface2);color:var(--text2);cursor:pointer;font-weight:600;font-size:.9rem;transition:background .2s}
+.type-btn.active.income{background:var(--income);color:#fff}
+.type-btn.active.expense{background:var(--expense);color:#fff}
+.category-pills{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.pill{padding:6px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--surface2);cursor:pointer;font-size:.82rem;transition:all .15s}
+.pill.selected{background:var(--primary);color:#fff;border-color:var(--primary)}
+/* Transactions list */
+.tx-item{display:flex;align-items:center;gap:10px;padding:12px;background:var(--surface);border-radius:10px;margin-bottom:8px;box-shadow:var(--shadow)}
+.tx-icon{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
+.tx-icon.income{background:#d1fae5} .tx-icon.expense{background:#fee2e2}
+.tx-info{flex:1;min-width:0}
+.tx-desc{font-weight:600;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tx-meta{font-size:.78rem;color:var(--text2);margin-top:2px}
+.tx-amount{font-weight:700;font-size:.95rem;white-space:nowrap}
+.tx-amount.income{color:var(--income)} .tx-amount.expense{color:var(--expense)}
+.badge{font-size:.7rem;padding:2px 7px;border-radius:10px;font-weight:600;margin-left:4px}
+.badge-income{background:#d1fae5;color:#065f46} .badge-expense{background:#fee2e2;color:#991b1b}
+.badge-rec{background:#d1fae5;color:#065f46} .badge-split{background:#dbeafe;color:#1e40af}
+/* Progress bars */
+.progress-bar{height:10px;background:var(--surface2);border-radius:5px;overflow:hidden;margin:6px 0}
+.progress-fill{height:100%;border-radius:5px;transition:width .5s}
+.fill-green{background:var(--income)} .fill-amber{background:var(--warning)} .fill-red{background:var(--expense)}
+/* Filters */
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.filters select{padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:.85rem}
+/* Calendar */
+.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal-day-header{text-align:center;font-size:.75rem;font-weight:700;color:var(--text2);padding:6px 0}
+.cal-day{min-height:70px;padding:4px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;transition:background .15s;font-size:.78rem}
+.cal-day:hover{background:var(--border)}
+.cal-day.empty{background:transparent;border:none;cursor:default}
+.cal-day.today{border:2px solid var(--primary)}
+.cal-day .day-num{font-weight:700;margin-bottom:2px}
+.cal-day .day-inc{color:var(--income);font-size:.72rem}
+.cal-day .day-exp{color:var(--expense);font-size:.72rem}
+/* Charts */
+.chart-wrap{position:relative;height:280px;margin-bottom:20px}
+/* Toggle */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
+.toggle-switch{position:relative;width:44px;height:24px;cursor:pointer}
+.toggle-switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:#ccc;border-radius:12px;transition:.3s}
+.slider:before{content:'';position:absolute;height:18px;width:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.3s}
+.toggle-switch input:checked+.slider{background:var(--primary)}
+.toggle-switch input:checked+.slider:before{transform:translateX(20px)}
+/* Misc */
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.empty{text-align:center;color:var(--text2);padding:30px;font-size:.9rem}
+.alert{padding:10px 14px;border-radius:8px;margin-bottom:12px;font-size:.88rem}
+.alert-success{background:#d1fae5;color:#065f46} .alert-error{background:#fee2e2;color:#991b1b}
+.split-row{display:flex;gap:8px;margin-bottom:6px;align-items:center}
+.split-row select{flex:1} .split-row input{width:100px}
+.yoy-table{width:100%;border-collapse:collapse;font-size:.88rem}
+.yoy-table th,.yoy-table td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--border)}
+.yoy-table th{font-size:.8rem;color:var(--text2);text-transform:uppercase}
+.yoy-table tr:hover{background:var(--surface2)}
+.change-down{color:var(--income)} .change-up{color:var(--expense)}
+.mode-toggle{display:flex;gap:6px;margin-bottom:14px}
+.mode-btn{padding:7px 16px;border-radius:20px;border:1.5px solid var(--primary);background:transparent;color:var(--primary);cursor:pointer;font-size:.85rem;font-weight:600}
+.mode-btn.active{background:var(--primary);color:#fff}
+select optgroup{font-weight:700;color:var(--text2)}
+
+/* ── Mobile / PWA responsive ───────────────────────────────── */
+/* Safe-area insets for iPhone notch / home bar */
+header{padding-top:max(12px, env(safe-area-inset-top));
+       padding-left:max(20px, env(safe-area-inset-left));
+       padding-right:max(20px, env(safe-area-inset-right))}
+.tab-nav{padding-left:max(8px, env(safe-area-inset-left));
+         padding-right:max(8px, env(safe-area-inset-right))}
+.tab-content{padding-bottom:max(16px, env(safe-area-inset-bottom))}
+
+/* Touch-friendly tap targets — 44 px minimum */
+.btn{min-height:44px}
+.btn-sm{min-height:44px;padding:10px 16px}
+.tab-btn{min-height:44px;padding:12px 14px}
+.num-btn{min-height:60px}
+.icon-btn{min-height:44px;min-width:44px}
+.pill{min-height:36px;display:flex;align-items:center;justify-content:center}
+.form-group input,.form-group select,.form-group textarea{min-height:44px}
+
+/* Larger base font on mobile for readability */
+@media(max-width:480px){
+  body{font-size:15px}
+  header h1{font-size:1.05rem}
+  .amount-display{font-size:2rem}
+  .metric-card .value{font-size:.92rem}
+  .metric-card .label{font-size:.68rem}
+
+  /* Summary strip: 2 columns on small screens */
+  .summary-strip{grid-template-columns:repeat(2,1fr);gap:6px;padding:10px 12px}
+
+  /* Tab bar: allow wrapping on very small screens */
+  .tab-nav{flex-wrap:wrap;gap:0}
+  .tab-btn{font-size:.78rem;padding:10px 10px}
+
+  /* Stack form rows */
+  .form-row{grid-template-columns:1fr}
+
+  /* Calendar: tighter cells */
+  .cal-day{min-height:52px;font-size:.72rem}
+  .cal-day-header{font-size:.68rem}
+
+  /* Charts full width */
+  .chart-wrap{height:240px}
+
+  /* Numpad: fill width */
+  .numpad{max-width:100%}
+  .num-btn{padding:14px;font-size:1.2rem}
+
+  /* Cards: tighter padding on phone */
+  .card{padding:12px}
+
+  /* YoY table: horizontal scroll */
+  .yoy-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .yoy-table{min-width:480px}
+
+  /* Filters: full width selects */
+  .filters{flex-direction:column}
+  .filters select{width:100%}
+
+  /* Lock box fills the screen on small phones */
+  .lock-box{width:calc(100vw - 32px);padding:28px 20px}
+
+  /* Net worth cards: 3→1 on tiny screens */
+  #networthCards{grid-template-columns:1fr!important}
+}
+
+@media(min-width:481px) and (max-width:767px){
+  .summary-strip{grid-template-columns:repeat(4,1fr)}
+}
+</style>
+</head>
+<body>
+
+<!-- LOCK SCREEN -->
+<div id="lockScreen">
+  <div class="lock-box">
+    <div class="lock-logo">💰</div>
+    <h1>Finance Tracker</h1>
+    <p id="lockSubtitle">Enter your password to continue</p>
+    <div id="setupForm" style="display:none">
+      <div class="pw-wrap">
+        <input type="password" id="setupPw" placeholder="Create password" oninput="checkCriteria('setupPw','setupCriteria')">
+        <button class="eye-btn" id="eyeSetup" onclick="toggleEye('setupPw','eyeSetup')">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <div class="criteria" id="setupCriteria">
+        <div id="c-len" class="fail">✗ At least 6 characters</div>
+        <div id="c-up" class="fail">✗ Uppercase letter</div>
+        <div id="c-low" class="fail">✗ Lowercase letter</div>
+        <div id="c-num" class="fail">✗ Number</div>
+        <div id="c-spc" class="fail">✗ Special character</div>
+      </div>
+      <div class="pw-wrap">
+        <input type="password" id="confirmPw" placeholder="Confirm password">
+        <button class="eye-btn" id="eyeConfirm" onclick="toggleEye('confirmPw','eyeConfirm')">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <button class="btn" onclick="createPassword()">Create Password & Start</button>
+      <div class="lock-err" id="setupErr"></div>
+    </div>
+    <div id="loginForm">
+      <div class="pw-wrap">
+        <input type="password" id="loginPw" placeholder="Password" onkeydown="if(event.key==='Enter')unlock()">
+        <button class="eye-btn" id="eyeLogin" onclick="toggleEye('loginPw','eyeLogin')">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <button class="btn" onclick="unlock()">Unlock</button>
+      <div class="lock-err" id="loginErr"></div>
+      <span class="setup-link" onclick="showImport()">Restore from backup</span>
+    </div>
+    <div id="importForm" style="display:none">
+      <p style="margin-bottom:10px;font-size:.85rem;color:#666">Upload your .enc backup file</p>
+      <input type="file" id="backupFile" accept=".enc" style="margin-bottom:10px;width:100%">
+      <div class="pw-wrap">
+        <input type="password" id="importPw" placeholder="Backup password">
+        <button class="eye-btn" id="eyeImport" onclick="toggleEye('importPw','eyeImport')">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <button class="btn" onclick="importBackup()">Restore</button>
+      <div class="lock-err" id="importErr"></div>
+      <span class="setup-link" onclick="showLogin()">Back to login</span>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header>
+    <h1>💰 Finance Tracker</h1>
+    <div class="header-btns">
+      <span id="syncCloud" onclick="goToSettings()" style="cursor:pointer;font-size:1.3rem;color:#9ca3af;line-height:1" title="Google Drive: not connected">☁</span>
+      <button class="icon-btn" onclick="toggleDark()">🌙 <span id="darkLabel">Dark</span></button>
+      <button class="icon-btn" onclick="lockApp()">🔒 Lock</button>
+    </div>
+  </header>
+
+  <!-- Summary strip -->
+  <div class="summary-strip" id="summaryStrip">
+    <div class="metric-card"><div class="label">Income</div><div class="value inc" id="m-income">—</div></div>
+    <div class="metric-card"><div class="label">Expenses</div><div class="value exp" id="m-expense">—</div></div>
+    <div class="metric-card"><div class="label">Net Balance</div><div class="value" id="m-net">—</div></div>
+    <div class="metric-card"><div class="label">Entries</div><div class="value" id="m-count">—</div></div>
+    <div class="metric-card"><div class="label">Cash</div><div class="value" id="m-cash">—</div></div>
+    <div class="metric-card"><div class="label">Savings</div><div class="value" id="m-savings">—</div></div>
+    <div class="metric-card"><div class="label">Investments</div><div class="value" id="m-invest">—</div></div>
+    <div class="metric-card"><div class="label">Total Wealth</div><div class="value" id="m-wealth">—</div></div>
+  </div>
+
+  <!-- Tab navigation -->
+  <div class="tab-nav">
+    <button class="tab-btn active" onclick="switchTab('add')">➕ Add</button>
+    <button class="tab-btn" onclick="switchTab('log')">📋 Log</button>
+    <button class="tab-btn" onclick="switchTab('recurring')">🔄 Recurring</button>
+    <button class="tab-btn" onclick="switchTab('budgets')">🎯 Budgets</button>
+    <button class="tab-btn" onclick="switchTab('goals')">⭐ Goals</button>
+    <button class="tab-btn" onclick="switchTab('analytics')">📊 Analytics</button>
+    <button class="tab-btn" onclick="switchTab('yoy')">📅 YoY</button>
+    <button class="tab-btn" onclick="switchTab('networth')">🏦 Net Worth</button>
+    <button class="tab-btn" onclick="switchTab('summary')">📄 Summary</button>
+    <button class="tab-btn" onclick="switchTab('calendar')">🗓 Calendar</button>
+    <button class="tab-btn" onclick="switchTab('charts')">📈 Charts</button>
+    <button class="tab-btn" onclick="switchTab('settings')">⚙️ Settings</button>
+  </div>
+
+  <!-- ADD TAB -->
+  <div id="tab-add" class="tab-content active">
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="modeQuick" onclick="setAddMode('quick')">Quick Capture</button>
+      <button class="mode-btn" id="modeFull" onclick="setAddMode('full')">Full Entry</button>
+    </div>
+    <!-- Quick Capture -->
+    <div id="quickCapture">
+      <div class="card">
+        <div class="amount-display" id="numDisplay">0</div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label style="font-size:.85rem;font-weight:600;color:var(--text2)">Transaction date</label>
+          <input type="date" id="quickDate">
+        </div>
+        <div class="type-toggle">
+          <button class="type-btn active expense" id="typeExpBtn" onclick="setQuickType('expense')">▼ Expense</button>
+          <button class="type-btn income" id="typeIncBtn" onclick="setQuickType('income')">▲ Income</button>
+        </div>
+        <div style="text-align:right;margin-bottom:6px">
+          <button class="btn btn-outline btn-sm" onclick="openSMSPaste()">📋 Paste SMS</button>
+        </div>
+        <div id="smsPasteArea" style="display:none;margin-bottom:10px">
+          <textarea id="smsPasteInput" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:.85rem;resize:vertical" placeholder="Paste your ZKB SMS message here…"></textarea>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button class="btn btn-success btn-sm" onclick="parseSMS()">Parse</button>
+            <button class="btn btn-outline btn-sm" onclick="closeSMSPaste()">Cancel</button>
+          </div>
+          <div id="smsMsg" style="font-size:.8rem;min-height:16px;margin-top:4px;color:var(--expense)"></div>
+        </div>
+        <div class="numpad">
+          <button class="num-btn" onclick="numPress('7')">7</button>
+          <button class="num-btn" onclick="numPress('8')">8</button>
+          <button class="num-btn" onclick="numPress('9')">9</button>
+          <button class="num-btn" onclick="numPress('4')">4</button>
+          <button class="num-btn" onclick="numPress('5')">5</button>
+          <button class="num-btn" onclick="numPress('6')">6</button>
+          <button class="num-btn" onclick="numPress('1')">1</button>
+          <button class="num-btn" onclick="numPress('2')">2</button>
+          <button class="num-btn" onclick="numPress('3')">3</button>
+          <button class="num-btn" onclick="numPress('.')">.</button>
+          <button class="num-btn" onclick="numPress('0')">0</button>
+          <button class="num-btn" onclick="numPress('⌫')">⌫</button>
+        </div>
+        <div style="margin-top:12px">
+          <label style="font-size:.85rem;font-weight:600;color:var(--text2)">Category</label>
+          <div class="category-pills" id="quickCatPills"></div>
+        </div>
+        <div style="margin-top:8px">
+          <label style="font-size:.85rem;font-weight:600;color:var(--text2)">Wallet</label>
+          <div class="category-pills" id="quickWalletPills"></div>
+        </div>
+        <div class="form-group" style="margin-top:10px">
+          <input type="text" id="quickNote" placeholder="Optional note...">
+        </div>
+        <button class="btn btn-success" onclick="saveQuick()">Save Transaction</button>
+        <div id="quickMsg" style="margin-top:8px;font-size:.85rem;min-height:20px"></div>
+      </div>
+    </div>
+    <!-- Full Entry -->
+    <div id="fullEntry" style="display:none">
+      <div class="card">
+        <div class="form-group">
+          <label>Description</label>
+          <input type="text" id="fe-desc" placeholder="e.g. Grocery shopping">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Amount</label>
+            <input type="number" id="fe-amount" placeholder="0.00" min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label>Type</label>
+            <select id="fe-type" onchange="renderFECategories()">
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Category</label>
+            <select id="fe-category"></select>
+          </div>
+          <div class="form-group">
+            <label>Wallet</label>
+            <select id="fe-wallet">
+              <option value="Cash">Cash</option>
+              <option value="Cash savings">Cash savings</option>
+              <option value="Investments">Investments</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="fe-date">
+        </div>
+        <div class="toggle-row" style="margin-bottom:10px">
+          <span style="font-size:.9rem">Split transaction?</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="fe-split" onchange="toggleSplit()">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div id="splitSection" style="display:none">
+          <div id="splitRows"></div>
+          <button class="btn btn-outline btn-sm" onclick="addSplitRow()" style="margin-bottom:8px">+ Add Split</button>
+          <div id="splitMsg" style="font-size:.82rem;color:var(--text2);margin-bottom:8px"></div>
+        </div>
+        <button class="btn btn-success" onclick="saveFull()">Add Transaction</button>
+        <div id="fullMsg" style="margin-top:8px;font-size:.85rem;min-height:20px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOG TAB -->
+  <div id="tab-log" class="tab-content">
+    <div class="filters">
+      <select id="log-type" onchange="renderLog()"><option value="">All Types</option><option value="income">Income</option><option value="expense">Expense</option></select>
+      <select id="log-wallet" onchange="renderLog()"><option value="">All Wallets</option><option value="Cash">Cash</option><option value="Cash savings">Cash savings</option><option value="Investments">Investments</option></select>
+      <select id="log-cat" onchange="renderLog()"><option value="">All Categories</option></select>
+      <button class="btn btn-outline btn-sm" onclick="exportCSV()">⬇ CSV</button>
+    </div>
+    <div id="logList"></div>
+  </div>
+
+  <!-- RECURRING TAB -->
+  <div id="tab-recurring" class="tab-content">
+    <div class="card">
+      <div class="card-title">Add Recurring Transaction</div>
+      <div class="form-group"><label>Description</label><input type="text" id="r-desc" placeholder="e.g. Netflix subscription"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Amount</label><input type="number" id="r-amount" min="0" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Type</label><select id="r-type" onchange="renderRCats()"><option value="expense">Expense</option><option value="income">Income</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Category</label><select id="r-cat"></select></div>
+        <div class="form-group"><label>Wallet</label><select id="r-wallet"><option>Cash</option><option>Cash savings</option><option>Investments</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Frequency</label><select id="r-freq"><option value="monthly">Monthly</option><option value="weekly">Weekly</option><option value="yearly">Yearly</option></select></div>
+        <div class="form-group"><label>Start Date</label><input type="date" id="r-start"></div>
+      </div>
+      <button class="btn btn-success" onclick="addRecurring()">Add Recurring</button>
+    </div>
+    <div class="section-header">
+      <span style="font-weight:700">Active Recurring</span>
+      <button class="btn btn-sm" onclick="applyRecurring()">▶ Apply Due</button>
+    </div>
+    <div id="recurringList"></div>
+  </div>
+
+  <!-- BUDGETS TAB -->
+  <div id="tab-budgets" class="tab-content">
+    <div class="card">
+      <div class="card-title">Add Budget</div>
+      <div class="form-row">
+        <div class="form-group"><label>Category</label><select id="b-cat"></select></div>
+        <div class="form-group"><label>Monthly Limit</label><input type="number" id="b-limit" min="0" step="0.01" placeholder="0.00"></div>
+      </div>
+      <button class="btn btn-success" onclick="addBudget()">Set Budget</button>
+    </div>
+    <div id="budgetList"></div>
+  </div>
+
+  <!-- GOALS TAB -->
+  <div id="tab-goals" class="tab-content">
+    <div class="card">
+      <div class="card-title">Add Savings Goal</div>
+      <div class="form-row">
+        <div class="form-group"><label>Goal Name</label><input type="text" id="g-name" placeholder="e.g. Emergency Fund"></div>
+        <div class="form-group"><label>Target Amount</label><input type="number" id="g-target" min="0" step="0.01" placeholder="0.00"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Current Saved</label><input type="number" id="g-saved" min="0" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Target Date</label><input type="date" id="g-date"></div>
+      </div>
+      <button class="btn btn-success" onclick="addGoal()">Add Goal</button>
+    </div>
+    <div id="goalList"></div>
+  </div>
+
+  <!-- ANALYTICS TAB -->
+  <div id="tab-analytics" class="tab-content">
+    <div class="card">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="btn btn-outline btn-sm" onclick="setAnalyticsPeriod('thisMonth')">This Month</button>
+        <button class="btn btn-outline btn-sm" onclick="setAnalyticsPeriod('lastMonth')">Last Month</button>
+        <button class="btn btn-outline btn-sm" onclick="setAnalyticsPeriod('thisYear')">This Year</button>
+        <button class="btn btn-outline btn-sm" onclick="setAnalyticsPeriod('lastYear')">Last Year</button>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Month</label><select id="a-month"></select></div>
+        <div class="form-group"><label>Year</label><select id="a-year"></select></div>
+      </div>
+      <button class="btn btn-sm btn-outline" onclick="renderAnalytics()">Apply</button>
+    </div>
+    <div id="analyticsResult"></div>
+  </div>
+
+  <!-- YOY TAB -->
+  <div id="tab-yoy" class="tab-content">
+    <div id="yoyContent"></div>
+  </div>
+
+  <!-- NET WORTH TAB -->
+  <div id="tab-networth" class="tab-content">
+    <div class="card">
+      <div class="card-title">Add Liability</div>
+      <div class="form-row">
+        <div class="form-group"><label>Description</label><input type="text" id="l-desc" placeholder="e.g. Car loan"></div>
+        <div class="form-group"><label>Amount</label><input type="number" id="l-amount" min="0" step="0.01" placeholder="0.00"></div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="addLiability()">Add Liability</button>
+    </div>
+    <div id="networthCards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px"></div>
+    <div class="card">
+      <div class="card-title">Net Worth Trend</div>
+      <div class="chart-wrap"><canvas id="nwChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Liabilities</div>
+      <div id="liabilityList"></div>
+    </div>
+  </div>
+
+  <!-- SUMMARY TAB -->
+  <div id="tab-summary" class="tab-content">
+    <div class="card">
+      <div class="form-row">
+        <div class="form-group"><label>Month</label><select id="s-month"></select></div>
+        <div class="form-group"><label>Year</label><select id="s-year"></select></div>
+      </div>
+      <button class="btn btn-sm" onclick="renderSummary()">View Report</button>
+    </div>
+    <div id="summaryResult"></div>
+  </div>
+
+  <!-- CALENDAR TAB -->
+  <div id="tab-calendar" class="tab-content">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <button class="btn btn-outline btn-sm" onclick="calNav(-1)">‹ Prev</button>
+        <span id="calTitle" style="font-weight:700"></span>
+        <button class="btn btn-outline btn-sm" onclick="calNav(1)">Next ›</button>
+      </div>
+      <div class="calendar-grid" id="calGrid"></div>
+    </div>
+    <div id="calDayDetail" class="card" style="display:none"></div>
+  </div>
+
+  <!-- CHARTS TAB -->
+  <div id="tab-charts" class="tab-content">
+    <div class="card">
+      <div class="card-title">Monthly Income vs Expenses (Last 24 Months)</div>
+      <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Wallet Breakdown</div>
+      <div style="max-width:300px;margin:0 auto"><div class="chart-wrap"><canvas id="donutChart"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Expenses by Category</div>
+      <div class="chart-wrap" style="height:400px"><canvas id="hbarChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- SETTINGS TAB -->
+  <div id="tab-settings" class="tab-content">
+    <div class="card">
+      <div class="card-title">Currency</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Select Currency</label>
+          <select id="currencySelect" onchange="setCurrency(this.value)">
+            <optgroup label="Europe">
+              <option value="EUR">EUR – Euro</option><option value="GBP">GBP – British Pound</option>
+              <option value="CHF">CHF – Swiss Franc</option><option value="NOK">NOK – Norwegian Krone</option>
+              <option value="SEK">SEK – Swedish Krona</option><option value="DKK">DKK – Danish Krone</option>
+              <option value="PLN">PLN – Polish Złoty</option><option value="CZK">CZK – Czech Koruna</option>
+              <option value="HUF">HUF – Hungarian Forint</option><option value="RON">RON – Romanian Leu</option>
+              <option value="HRK">HRK – Croatian Kuna</option><option value="BGN">BGN – Bulgarian Lev</option>
+              <option value="ISK">ISK – Icelandic Króna</option><option value="ALL">ALL – Albanian Lek</option>
+              <option value="MKD">MKD – Macedonian Denar</option><option value="RSD">RSD – Serbian Dinar</option>
+              <option value="UAH">UAH – Ukrainian Hryvnia</option>
+            </optgroup>
+            <optgroup label="Americas">
+              <option value="USD">USD – US Dollar</option><option value="CAD">CAD – Canadian Dollar</option>
+              <option value="MXN">MXN – Mexican Peso</option><option value="BRL">BRL – Brazilian Real</option>
+              <option value="ARS">ARS – Argentine Peso</option><option value="CLP">CLP – Chilean Peso</option>
+              <option value="COP">COP – Colombian Peso</option><option value="PEN">PEN – Peruvian Sol</option>
+              <option value="UYU">UYU – Uruguayan Peso</option><option value="VEF">VEF – Venezuelan Bolívar</option>
+              <option value="BOB">BOB – Bolivian Boliviano</option><option value="GTQ">GTQ – Guatemalan Quetzal</option>
+              <option value="CRC">CRC – Costa Rican Colón</option><option value="DOP">DOP – Dominican Peso</option>
+              <option value="JMD">JMD – Jamaican Dollar</option><option value="TTD">TTD – Trinidad & Tobago Dollar</option>
+            </optgroup>
+            <optgroup label="Asia East & SE">
+              <option value="CNY">CNY – Chinese Yuan</option><option value="JPY">JPY – Japanese Yen</option>
+              <option value="KRW">KRW – South Korean Won</option><option value="HKD">HKD – Hong Kong Dollar</option>
+              <option value="TWD">TWD – Taiwan Dollar</option><option value="SGD">SGD – Singapore Dollar</option>
+              <option value="MYR">MYR – Malaysian Ringgit</option><option value="THB">THB – Thai Baht</option>
+              <option value="IDR">IDR – Indonesian Rupiah</option><option value="PHP">PHP – Philippine Peso</option>
+              <option value="VND">VND – Vietnamese Dong</option><option value="MMK">MMK – Myanmar Kyat</option>
+              <option value="KHR">KHR – Cambodian Riel</option><option value="LAK">LAK – Lao Kip</option>
+              <option value="BND">BND – Brunei Dollar</option>
+            </optgroup>
+            <optgroup label="Asia South">
+              <option value="INR">INR – Indian Rupee</option><option value="PKR">PKR – Pakistani Rupee</option>
+              <option value="BDT">BDT – Bangladeshi Taka</option><option value="NPR">NPR – Nepalese Rupee</option>
+              <option value="LKR">LKR – Sri Lankan Rupee</option><option value="MVR">MVR – Maldivian Rufiyaa</option>
+              <option value="AFN">AFN – Afghan Afghani</option>
+            </optgroup>
+            <optgroup label="Asia Central">
+              <option value="KZT">KZT – Kazakhstani Tenge</option><option value="UZS">UZS – Uzbekistani Som</option>
+              <option value="AZN">AZN – Azerbaijani Manat</option><option value="GEL">GEL – Georgian Lari</option>
+              <option value="AMD">AMD – Armenian Dram</option><option value="TMT">TMT – Turkmenistani Manat</option>
+            </optgroup>
+            <optgroup label="Middle East">
+              <option value="SAR">SAR – Saudi Riyal</option><option value="AED">AED – UAE Dirham</option>
+              <option value="QAR">QAR – Qatari Riyal</option><option value="KWD">KWD – Kuwaiti Dinar</option>
+              <option value="BHD">BHD – Bahraini Dinar</option><option value="OMR">OMR – Omani Rial</option>
+              <option value="JOD">JOD – Jordanian Dinar</option><option value="ILS">ILS – Israeli Shekel</option>
+              <option value="IRR">IRR – Iranian Rial</option><option value="IQD">IQD – Iraqi Dinar</option>
+              <option value="LBP">LBP – Lebanese Pound</option><option value="SYP">SYP – Syrian Pound</option>
+            </optgroup>
+            <optgroup label="Africa North">
+              <option value="EGP">EGP – Egyptian Pound</option><option value="MAD">MAD – Moroccan Dirham</option>
+              <option value="DZD">DZD – Algerian Dinar</option><option value="TND">TND – Tunisian Dinar</option>
+              <option value="LYD">LYD – Libyan Dinar</option><option value="SDG">SDG – Sudanese Pound</option>
+            </optgroup>
+            <optgroup label="Africa West & Central">
+              <option value="NGN">NGN – Nigerian Naira</option><option value="GHS">GHS – Ghanaian Cedi</option>
+              <option value="XOF">XOF – West African CFA</option><option value="XAF">XAF – Central African CFA</option>
+              <option value="SLL">SLL – Sierra Leonean Leone</option><option value="GMD">GMD – Gambian Dalasi</option>
+            </optgroup>
+            <optgroup label="Africa East & South">
+              <option value="ZAR">ZAR – South African Rand</option><option value="KES">KES – Kenyan Shilling</option>
+              <option value="TZS">TZS – Tanzanian Shilling</option><option value="UGX">UGX – Ugandan Shilling</option>
+              <option value="ETB">ETB – Ethiopian Birr</option><option value="MZN">MZN – Mozambican Metical</option>
+              <option value="ZMW">ZMW – Zambian Kwacha</option><option value="BWP">BWP – Botswanan Pula</option>
+              <option value="NAD">NAD – Namibian Dollar</option>
+            </optgroup>
+            <optgroup label="Oceania">
+              <option value="AUD">AUD – Australian Dollar</option><option value="NZD">NZD – New Zealand Dollar</option>
+              <option value="FJD">FJD – Fijian Dollar</option><option value="PGK">PGK – Papua New Guinea Kina</option>
+            </optgroup>
+            <optgroup label="Russia & post-Soviet">
+              <option value="RUB">RUB – Russian Ruble</option><option value="BYN">BYN – Belarusian Ruble</option>
+              <option value="MDL">MDL – Moldovan Leu</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Custom Currency Code</label>
+          <input type="text" id="customCurrency" placeholder="e.g. XYZ" maxlength="5" oninput="setCurrency(this.value.toUpperCase())">
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Opening Balances</div>
+      <div class="form-row">
+        <div class="form-group"><label>Cash</label><input type="number" id="ob-cash" placeholder="0.00" step="0.01" onchange="saveOpeningBalances()"></div>
+        <div class="form-group"><label>Cash Savings</label><input type="number" id="ob-savings" placeholder="0.00" step="0.01" onchange="saveOpeningBalances()"></div>
+      </div>
+      <div class="form-group" style="max-width:48%"><label>Investments</label><input type="number" id="ob-invest" placeholder="0.00" step="0.01" onchange="saveOpeningBalances()"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Income Categories</div>
+      <div id="incCatList" style="margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="newIncCat" placeholder="New category" style="flex:1;padding:8px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)">
+        <button class="btn btn-sm" onclick="addCategory('income')">Add</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Expense Categories</div>
+      <div id="expCatList" style="margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="newExpCat" placeholder="New category" style="flex:1;padding:8px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)">
+        <button class="btn btn-sm" onclick="addCategory('expense')">Add</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Change Password</div>
+      <div class="pw-wrap" style="margin-bottom:10px">
+        <input type="password" id="cpOld" placeholder="Current password">
+        <button class="eye-btn" id="eyeCpOld" onclick="toggleEye('cpOld','eyeCpOld')">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <div class="pw-wrap" style="margin-bottom:10px">
+        <input type="password" id="cpNew" placeholder="New password" oninput="checkCriteria('cpNew','cpCriteria')">
+        <button class="eye-btn" id="eyeCpNew" onclick="toggleEye('cpNew','eyeCpNew')">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <div class="criteria" id="cpCriteria">
+        <div id="cp-len" class="fail">✗ At least 6 characters</div>
+        <div id="cp-up" class="fail">✗ Uppercase letter</div>
+        <div id="cp-low" class="fail">✗ Lowercase letter</div>
+        <div id="cp-num" class="fail">✗ Number</div>
+        <div id="cp-spc" class="fail">✗ Special character</div>
+      </div>
+      <div class="pw-wrap" style="margin:10px 0">
+        <input type="password" id="cpConfirm" placeholder="Confirm new password">
+        <button class="eye-btn" id="eyeCpConf" onclick="toggleEye('cpConfirm','eyeCpConf')">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <button class="btn btn-sm" onclick="changePassword()">Update Password</button>
+      <div id="cpMsg" style="margin-top:8px;font-size:.85rem;min-height:20px"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Google Drive Sync</div>
+      <div id="driveNotConnected">
+        <button class="btn btn-sm btn-outline" onclick="connectDrive()">🔗 Connect Google Drive</button>
+      </div>
+      <div id="driveConnected" style="display:none">
+        <div style="font-size:.85rem;color:var(--text2);margin-bottom:10px">Connected as <strong id="driveEmail"></strong></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <button class="btn btn-sm btn-outline" onclick="syncNow()">☁ Sync Now</button>
+          <button class="btn btn-sm btn-outline" style="color:var(--expense);border-color:var(--expense)" onclick="disconnectDrive()">Disconnect</button>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:.85rem;cursor:pointer">
+          <input type="checkbox" id="driveAutoSync" onchange="toggleAutoSync()">
+          Auto-sync on every save
+        </label>
+        <div id="driveLastSync" style="font-size:.8rem;color:var(--text2);margin-top:8px"></div>
+      </div>
+      <div id="driveSyncMsg" style="font-size:.85rem;min-height:18px;margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Data</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-sm btn-outline" onclick="exportBackup()">⬇ Export Encrypted Backup</button>
+        <button class="btn btn-sm btn-outline" onclick="triggerSettingsImport()">⬆ Import Encrypted Backup</button>
+        <button class="btn btn-sm btn-outline" onclick="exportCSV()">⬇ Export CSV</button>
+      </div>
+      <input type="file" id="settingsBackupFile" accept=".enc" style="display:none" onchange="onSettingsBackupSelected()">
+      <div id="settingsImportArea" style="display:none;margin-top:12px">
+        <div class="form-group" style="margin-bottom:8px">
+          <label style="font-size:.85rem;font-weight:600;color:var(--text2)">Backup password</label>
+          <input type="password" id="settingsImportPw" placeholder="Enter the backup's password">
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-success btn-sm" onclick="doSettingsImport()">Decrypt &amp; Import</button>
+          <button class="btn btn-outline btn-sm" onclick="cancelSettingsImport()">Cancel</button>
+        </div>
+        <div id="settingsImportMsg" style="font-size:.85rem;min-height:18px;margin-top:6px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CONSTANTS & STATE ───────────────────────────────────────────────
+const STORAGE_KEY = 'ft_data_v1';
+const HASH_KEY = 'ft_hash_v1';
+const SALT_KEY = 'ft_salt_v1';
+
+let sessionKey = null; // derived key for this session
+let appData = null;
+let quickType = 'expense';
+let quickCat = '';
+let quickWallet = 'Cash';
+let numStr = '0';
+let calYear, calMonth;
+let nwChartInst = null, barChartInst = null, donutInst = null, hbarInst = null;
+
+const OPEN_EYE = `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const CLOSED_EYE = `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+
+// ─── ENCRYPTION ──────────────────────────────────────────────────────
+function deriveKey(password, salt) {
+  return CryptoJS.PBKDF2(password, salt, { keySize: 256/32, iterations: 10000, hasher: CryptoJS.algo.SHA256 }).toString();
+}
+
+function encrypt(data, key) {
+  return CryptoJS.AES.encrypt(JSON.stringify(data), key).toString();
+}
+
+function decrypt(ciphertext, key) {
+  try {
+    const bytes = CryptoJS.AES.decrypt(ciphertext, key);
+    const dec = bytes.toString(CryptoJS.enc.Utf8);
+    if (!dec) return null;
+    return JSON.parse(dec);
+  } catch(e) { return null; }
+}
+
+function hashPassword(password, salt) {
+  return CryptoJS.PBKDF2(password, salt+'_hash', { keySize: 256/32, iterations: 10000 }).toString();
+}
+
+// ─── LOCK / UNLOCK ───────────────────────────────────────────────────
+function init() {
+  const existingHash = localStorage.getItem(HASH_KEY);
+  if (!existingHash) {
+    // First run — show setup
+    document.getElementById('lockSubtitle').textContent = 'Create a password to secure your data';
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('setupForm').style.display = 'block';
+  } else {
+    document.getElementById('lockSubtitle').textContent = 'Enter your password to continue';
+    document.getElementById('loginForm').style.display = 'block';
+    document.getElementById('setupForm').style.display = 'none';
+  }
+}
+
+function createPassword() {
+  const pw = document.getElementById('setupPw').value;
+  const conf = document.getElementById('confirmPw').value;
+  const err = document.getElementById('setupErr');
+  if (!passwordValid(pw)) { err.textContent = 'Password does not meet all requirements.'; return; }
+  if (pw !== conf) { err.textContent = 'Passwords do not match.'; return; }
+  const salt = CryptoJS.lib.WordArray.random(128/8).toString();
+  localStorage.setItem(SALT_KEY, salt);
+  localStorage.setItem(HASH_KEY, hashPassword(pw, salt));
+  sessionKey = deriveKey(pw, salt);
+  sessionStorage.setItem('ft_session_pw', pw);
+  appData = defaultData();
+  saveData();
+  startApp();
+}
+
+function unlock() {
+  const pw = document.getElementById('loginPw').value;
+  const err = document.getElementById('loginErr');
+  const salt = localStorage.getItem(SALT_KEY);
+  const storedHash = localStorage.getItem(HASH_KEY);
+  if (hashPassword(pw, salt) !== storedHash) { err.textContent = 'Incorrect password.'; return; }
+  sessionKey = deriveKey(pw, salt);
+  sessionStorage.setItem('ft_session_pw', pw);
+  const enc = localStorage.getItem(STORAGE_KEY);
+  if (enc) {
+    appData = decrypt(enc, sessionKey);
+    if (!appData) { err.textContent = 'Decryption failed. Wrong key?'; return; }
+    // Migrate missing fields
+    appData = Object.assign(defaultData(), appData);
+  } else {
+    appData = defaultData();
+  }
+  startApp();
+}
+
+function lockApp() {
+  saveData();
+  sessionKey = null;
+  appData = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('lockScreen').style.display = 'flex';
+  document.getElementById('loginPw').value = '';
+  document.getElementById('loginErr').textContent = '';
+  document.getElementById('loginForm').style.display = 'block';
+  document.getElementById('importForm').style.display = 'none';
+}
+
+function startApp() {
+  document.getElementById('lockScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  if (appData.settings.darkMode) { document.body.classList.add('dark'); document.getElementById('darkLabel').textContent = 'Light'; }
+  populateSelectors();
+  renderQuickPills();
+  updateSummary();
+  setDefaultDates();
+  populateAnalyticsSelectors();
+  populateSummarySelectors();
+  document.getElementById('currencySelect').value = appData.settings.currency || 'USD';
+  loadOpeningBalances();
+  renderCategorySettings();
+  const now = new Date();
+  calYear = now.getFullYear(); calMonth = now.getMonth();
+  renderCalendar();
+  renderLog();
+  renderRecurring();
+  renderBudgets();
+  renderGoals();
+  renderNetWorth();
+  renderWalletPills();
+  initDriveSync();
+}
+
+function goToSettings() {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-settings').classList.add('active');
+  document.querySelector('.tab-btn[onclick*="settings"]').classList.add('active');
+}
+
+function showImport() {
+  document.getElementById('loginForm').style.display = 'none';
+  document.getElementById('importForm').style.display = 'block';
+}
+function showLogin() {
+  document.getElementById('importForm').style.display = 'none';
+  document.getElementById('loginForm').style.display = 'block';
+}
+
+function importBackup() {
+  const file = document.getElementById('backupFile').files[0];
+  const pw = document.getElementById('importPw').value;
+  const err = document.getElementById('importErr');
+  if (!file || !pw) { err.textContent = 'Select a file and enter password.'; return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    let enc, backupSalt;
+    try {
+      const parsed = JSON.parse(e.target.result.trim());
+      enc = parsed.data; backupSalt = parsed.salt;
+    } catch(_) {
+      // Legacy backup: raw ciphertext, use stored salt
+      enc = e.target.result.trim();
+      backupSalt = localStorage.getItem(SALT_KEY) || CryptoJS.lib.WordArray.random(128/8).toString();
+    }
+    const key = deriveKey(pw, backupSalt);
+    const data = decrypt(enc, key);
+    if (!data) { err.textContent = 'Wrong password or corrupted file.'; return; }
+    // Re-encrypt under the backup password with a fresh salt
+    const newSalt = CryptoJS.lib.WordArray.random(128/8).toString();
+    localStorage.setItem(SALT_KEY, newSalt);
+    localStorage.setItem(HASH_KEY, hashPassword(pw, newSalt));
+    sessionKey = deriveKey(pw, newSalt);
+    appData = Object.assign(defaultData(), data);
+    saveData();
+    startApp();
+  };
+  reader.readAsText(file);
+}
+
+// ─── DATA ────────────────────────────────────────────────────────────
+function defaultData() {
+  return {
+    transactions: [],
+    recurring: [],
+    budgets: [],
+    goals: [],
+    liabilities: [],
+    netWorthHistory: [],
+    lastModified: 0,
+    settings: {
+      currency: 'USD',
+      incomeCategories: ['Salary','Freelance','Investment','Gift','Other'],
+      expenseCategories: ['Food','Transport','Housing','Entertainment','Health','Shopping','Utilities','Education','Other'],
+      openingBalances: { cash: 0, savings: 0, investments: 0 },
+      darkMode: false
+    }
+  };
+}
+
+function saveData() {
+  if (!sessionKey || !appData) return;
+  appData.lastModified = Date.now();
+  localStorage.setItem(STORAGE_KEY, encrypt(appData, sessionKey));
+  _autoSync();
+}
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+
+// ─── EYE TOGGLE ──────────────────────────────────────────────────────
+function toggleEye(inputId, btnId) {
+  const input = document.getElementById(inputId);
+  const btn = document.getElementById(btnId);
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.innerHTML = CLOSED_EYE;
+  } else {
+    input.type = 'password';
+    btn.innerHTML = OPEN_EYE;
+  }
+}
+
+// ─── PASSWORD CRITERIA ───────────────────────────────────────────────
+function checkCriteria(inputId, containerId) {
+  const pw = document.getElementById(inputId).value;
+  const prefix = containerId === 'setupCriteria' ? 'c' : 'cp';
+  const set = (id, ok) => {
+    const el = document.getElementById(`${prefix}-${id}`);
+    if (!el) return;
+    el.className = ok ? 'ok' : 'fail';
+    el.textContent = (ok ? '✓ ' : '✗ ') + el.textContent.slice(2);
+  };
+  set('len', pw.length >= 6);
+  set('up', /[A-Z]/.test(pw));
+  set('low', /[a-z]/.test(pw));
+  set('num', /[0-9]/.test(pw));
+  set('spc', /[^A-Za-z0-9]/.test(pw));
+}
+
+function passwordValid(pw) {
+  return pw.length >= 6 && /[A-Z]/.test(pw) && /[a-z]/.test(pw) && /[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw);
+}
+
+// ─── DARK MODE ───────────────────────────────────────────────────────
+function toggleDark() {
+  document.body.classList.toggle('dark');
+  const dark = document.body.classList.contains('dark');
+  document.getElementById('darkLabel').textContent = dark ? 'Light' : 'Dark';
+  appData.settings.darkMode = dark;
+  saveData();
+}
+
+// ─── CURRENCY ────────────────────────────────────────────────────────
+function fmt(amount) {
+  const c = appData.settings.currency || 'USD';
+  return c + ' ' + Number(amount).toFixed(2);
+}
+
+function setCurrency(val) {
+  if (!val) return;
+  appData.settings.currency = val.toUpperCase();
+  saveData();
+  updateSummary();
+  renderLog();
+  renderBudgets();
+  renderGoals();
+  renderNetWorth();
+}
+
+// ─── TABS ────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (name === 'log') renderLog();
+  if (name === 'charts') renderCharts();
+  if (name === 'analytics') renderAnalytics();
+  if (name === 'yoy') renderYoY();
+  if (name === 'networth') renderNetWorth();
+  if (name === 'calendar') renderCalendar();
+  if (name === 'budgets') renderBudgets();
+  if (name === 'goals') renderGoals();
+  if (name === 'recurring') renderRecurring();
+  if (name === 'settings') { renderCategorySettings(); loadOpeningBalances(); }
+  if (name === 'summary') renderSummary();
+}
+
+// ─── SUMMARY STRIP ───────────────────────────────────────────────────
+function updateSummary() {
+  if (!appData) return;
+  const ob = appData.settings.openingBalances || {};
+  let income = 0, expense = 0;
+  const wallets = { Cash: ob.cash||0, 'Cash savings': ob.savings||0, Investments: ob.investments||0 };
+  appData.transactions.forEach(t => {
+    const amt = parseFloat(t.amount) || 0;
+    if (t.type === 'income') { income += amt; wallets[t.wallet] = (wallets[t.wallet]||0) + amt; }
+    else { expense += amt; wallets[t.wallet] = (wallets[t.wallet]||0) - amt; }
+  });
+  const net = income - expense;
+  const wealth = wallets['Cash'] + wallets['Cash savings'] + wallets['Investments'];
+  document.getElementById('m-income').textContent = fmt(income);
+  document.getElementById('m-expense').textContent = fmt(expense);
+  document.getElementById('m-net').textContent = fmt(net);
+  document.getElementById('m-net').style.color = net >= 0 ? 'var(--income)' : 'var(--expense)';
+  document.getElementById('m-count').textContent = appData.transactions.length;
+  document.getElementById('m-cash').textContent = fmt(wallets['Cash']);
+  document.getElementById('m-savings').textContent = fmt(wallets['Cash savings']);
+  document.getElementById('m-invest').textContent = fmt(wallets['Investments']);
+  document.getElementById('m-wealth').textContent = fmt(wealth);
+}
+
+// ─── ADD: QUICK CAPTURE ──────────────────────────────────────────────
+function setAddMode(mode) {
+  document.getElementById('quickCapture').style.display = mode === 'quick' ? 'block' : 'none';
+  document.getElementById('fullEntry').style.display = mode === 'full' ? 'block' : 'none';
+  document.getElementById('modeQuick').classList.toggle('active', mode === 'quick');
+  document.getElementById('modeFull').classList.toggle('active', mode === 'full');
+}
+
+function setQuickType(type) {
+  quickType = type;
+  document.getElementById('typeExpBtn').classList.toggle('active', type === 'expense');
+  document.getElementById('typeIncBtn').classList.toggle('active', type === 'income');
+  quickCat = '';
+  renderQuickPills();
+}
+
+function openSMSPaste() {
+  document.getElementById('smsPasteArea').style.display = 'block';
+  document.getElementById('smsPasteInput').value = '';
+  document.getElementById('smsMsg').textContent = '';
+  document.getElementById('smsPasteInput').focus();
+}
+function closeSMSPaste() {
+  document.getElementById('smsPasteArea').style.display = 'none';
+}
+function parseSMS() {
+  const txt = document.getElementById('smsPasteInput').value;
+  const amtMatch = txt.match(/charged CHF\s+([\d.,]+)/i);
+  const benMatch = txt.match(/xxxx\s+\d{4},\s*(.+)/i);
+  if (!amtMatch || !benMatch) {
+    document.getElementById('smsMsg').textContent = 'Could not read SMS format — please enter manually';
+    return;
+  }
+  const amt = amtMatch[1].replace(',', '.');
+  numStr = parseFloat(amt).toString();
+  document.getElementById('numDisplay').textContent = numStr;
+  document.getElementById('quickNote').value = benMatch[1].trim();
+  closeSMSPaste();
+}
+
+let editingId = null;
+function openEdit(id) {
+  const t = appData.transactions.find(x => x.id === id);
+  if (!t) return;
+  editingId = id;
+  document.getElementById('editAmt').value = t.amount;
+  document.getElementById('editType').value = t.type;
+  const catSel = document.getElementById('editCat');
+  const allCats = [...(appData.settings.expenseCategories || []), ...(appData.settings.incomeCategories || [])];
+  catSel.innerHTML = allCats.map(c => `<option value="${escHtml(c)}"${c===t.category?' selected':''}>${escHtml(c)}</option>`).join('');
+  document.getElementById('editWallet').value = t.wallet;
+  document.getElementById('editNote').value = t.note || '';
+  document.getElementById('editDate').value = t.date || today();
+  document.getElementById('editModal').style.display = 'flex';
+}
+function closeEdit() {
+  document.getElementById('editModal').style.display = 'none';
+  editingId = null;
+}
+function saveEdit() {
+  if (!editingId) return;
+  const idx = appData.transactions.findIndex(x => x.id === editingId);
+  if (idx === -1) return;
+  const t = appData.transactions[idx];
+  t.amount = parseFloat(document.getElementById('editAmt').value) || t.amount;
+  t.type = document.getElementById('editType').value;
+  t.category = document.getElementById('editCat').value;
+  t.wallet = document.getElementById('editWallet').value;
+  t.note = document.getElementById('editNote').value;
+  t.date = document.getElementById('editDate').value || t.date;
+  saveData(); updateSummary(); renderLog(); recordNetWorth();
+  closeEdit();
+}
+
+function numPress(val) {
+  if (val === '⌫') { numStr = numStr.length > 1 ? numStr.slice(0,-1) : '0'; }
+  else if (val === '.') { if (!numStr.includes('.')) numStr += '.'; }
+  else { if (numStr === '0') numStr = val; else numStr += val; }
+  document.getElementById('numDisplay').textContent = numStr;
+}
+
+function renderQuickPills() {
+  const cats = quickType === 'income' ? appData.settings.incomeCategories : appData.settings.expenseCategories;
+  const container = document.getElementById('quickCatPills');
+  container.innerHTML = cats.map(c => `<div class="pill${c===quickCat?' selected':''}" onclick="selectQuickCat('${c}')">${c}</div>`).join('');
+}
+
+function selectQuickCat(cat) { quickCat = cat; renderQuickPills(); }
+
+function renderWalletPills() {
+  const container = document.getElementById('quickWalletPills');
+  container.innerHTML = ['Cash','Cash savings','Investments'].map(w =>
+    `<div class="pill${w === quickWallet ? ' selected' : ''}" onclick="selectQuickWallet('${w}')">${w}</div>`
+  ).join('');
+}
+
+function selectQuickWallet(w) {
+  quickWallet = w;
+  renderWalletPills();
+}
+
+function saveQuick() {
+  const amount = parseFloat(numStr);
+  if (!amount || amount <= 0) { showMsg('quickMsg','Enter an amount','error'); return; }
+  if (!quickCat) { showMsg('quickMsg','Select a category','error'); return; }
+  const txDate = document.getElementById('quickDate').value || today();
+  const tx = { id: uid(), date: txDate, description: quickCat, amount, type: quickType, category: quickCat, wallet: quickWallet, note: document.getElementById('quickNote').value, isRecurring: false, isSplit: false, splits: [] };
+  appData.transactions.unshift(tx);
+  saveData(); updateSummary();
+  numStr = '0'; document.getElementById('numDisplay').textContent = '0';
+  document.getElementById('quickNote').value = '';
+  document.getElementById('quickDate').value = today();
+  quickCat = ''; renderQuickPills();
+  showMsg('quickMsg','Saved!','success');
+  recordNetWorth();
+}
+
+// ─── ADD: FULL ENTRY ─────────────────────────────────────────────────
+function renderFECategories() {
+  const type = document.getElementById('fe-type').value;
+  const cats = type === 'income' ? appData.settings.incomeCategories : appData.settings.expenseCategories;
+  const sel = document.getElementById('fe-category');
+  sel.innerHTML = cats.map(c => `<option>${c}</option>`).join('');
+}
+
+function toggleSplit() {
+  const on = document.getElementById('fe-split').checked;
+  document.getElementById('splitSection').style.display = on ? 'block' : 'none';
+  if (on && document.getElementById('splitRows').children.length === 0) addSplitRow();
+}
+
+function addSplitRow() {
+  const type = document.getElementById('fe-type').value;
+  const cats = type === 'income' ? appData.settings.incomeCategories : appData.settings.expenseCategories;
+  const row = document.createElement('div');
+  row.className = 'split-row';
+  row.innerHTML = `<select>${cats.map(c=>`<option>${c}</option>`).join('')}</select><input type="number" placeholder="0.00" step="0.01" min="0" oninput="checkSplitTotal()"><button onclick="this.parentElement.remove();checkSplitTotal()" style="background:var(--expense);color:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer">✕</button>`;
+  document.getElementById('splitRows').appendChild(row);
+}
+
+function checkSplitTotal() {
+  const main = parseFloat(document.getElementById('fe-amount').value) || 0;
+  const rows = document.querySelectorAll('#splitRows .split-row input[type=number]');
+  const total = Array.from(rows).reduce((s,r) => s + (parseFloat(r.value)||0), 0);
+  const msg = document.getElementById('splitMsg');
+  msg.textContent = `Split total: ${fmt(total)} / ${fmt(main)}`;
+  msg.style.color = Math.abs(total - main) < 0.01 ? 'var(--income)' : 'var(--expense)';
+}
+
+function saveFull() {
+  const desc = document.getElementById('fe-desc').value.trim() || 'Transaction';
+  const amount = parseFloat(document.getElementById('fe-amount').value);
+  const type = document.getElementById('fe-type').value;
+  const category = document.getElementById('fe-category').value;
+  const wallet = document.getElementById('fe-wallet').value;
+  const date = document.getElementById('fe-date').value || today();
+  const isSplit = document.getElementById('fe-split').checked;
+  if (!amount || amount <= 0) { showMsg('fullMsg','Enter valid amount','error'); return; }
+  let splits = [];
+  if (isSplit) {
+    const rows = document.querySelectorAll('#splitRows .split-row');
+    splits = Array.from(rows).map(r => ({ category: r.querySelector('select').value, amount: parseFloat(r.querySelector('input').value)||0 }));
+    const total = splits.reduce((s,sp) => s+sp.amount, 0);
+    if (Math.abs(total - amount) > 0.01) { showMsg('fullMsg','Split totals must equal main amount','error'); return; }
+  }
+  const tx = { id: uid(), date, description: desc, amount, type, category, wallet, note:'', isRecurring: false, isSplit, splits };
+  appData.transactions.unshift(tx);
+  appData.transactions.sort((a,b) => b.date.localeCompare(a.date));
+  saveData(); updateSummary();
+  document.getElementById('fe-desc').value = '';
+  document.getElementById('fe-amount').value = '';
+  document.getElementById('fe-split').checked = false;
+  document.getElementById('splitSection').style.display = 'none';
+  document.getElementById('splitRows').innerHTML = '';
+  showMsg('fullMsg','Saved!','success');
+  recordNetWorth();
+}
+
+function setDefaultDates() {
+  const t = today();
+  ['fe-date','r-start','quickDate'].forEach(id => { const el = document.getElementById(id); if(el) el.value = t; });
+}
+
+function today() { return new Date().toISOString().split('T')[0]; }
+
+// ─── LOG TAB ──────────────────────────────────────────────────────────
+function renderLog() {
+  if (!appData) return;
+  const typeFilter = document.getElementById('log-type').value;
+  const walletFilter = document.getElementById('log-wallet').value;
+  const catFilter = document.getElementById('log-cat').value;
+  // Populate cat filter
+  const allCats = [...new Set(appData.transactions.map(t => t.category))].sort();
+  const catSel = document.getElementById('log-cat');
+  const curCat = catSel.value;
+  catSel.innerHTML = '<option value="">All Categories</option>' + allCats.map(c => `<option${c===curCat?' selected':''}>${c}</option>`).join('');
+  let txs = [...appData.transactions]
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    .filter(t =>
+      (!typeFilter || t.type === typeFilter) &&
+      (!walletFilter || t.wallet === walletFilter) &&
+      (!catFilter || t.category === catFilter)
+    );
+  const list = document.getElementById('logList');
+  if (!txs.length) { list.innerHTML = '<div class="empty">No transactions found</div>'; return; }
+  list.innerHTML = txs.map(t => txItem(t, true)).join('');
+}
+
+function txItem(t, showDelete) {
+  const icon = t.type === 'income' ? '▲' : '▼';
+  const recBadge = t.isRecurring ? '<span class="badge badge-rec">rec</span>' : '';
+  const splitBadge = t.isSplit ? '<span class="badge badge-split">split</span>' : '';
+  const typeBadge = `<span class="badge ${t.type==='income'?'badge-income':'badge-expense'}">${t.type}</span>`;
+  const delBtn = showDelete ? `<button onclick="deleteTx('${t.id}')" style="background:none;border:none;cursor:pointer;color:var(--expense);font-size:1.1rem;padding:4px">🗑</button>` : '';
+  const editBtn = showDelete ? `<button onclick="openEdit('${t.id}')" style="background:none;border:none;cursor:pointer;color:var(--primary);font-size:1.1rem;padding:4px">✏️</button>` : '';
+  return `<div class="tx-item">
+    <div class="tx-icon ${t.type}">${icon}</div>
+    <div class="tx-info">
+      <div class="tx-desc">${escHtml(t.description)} ${recBadge}${splitBadge}</div>
+      <div class="tx-meta">${t.date} · ${escHtml(t.category)} · ${escHtml(t.wallet)} ${typeBadge}</div>
+    </div>
+    <div class="tx-amount ${t.type}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</div>
+    ${editBtn}${delBtn}
+  </div>`;
+}
+
+function deleteTx(id) {
+  appData.transactions = appData.transactions.filter(t => t.id !== id);
+  saveData(); updateSummary(); renderLog(); recordNetWorth();
+}
+
+function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ─── RECURRING ───────────────────────────────────────────────────────
+function renderRCats() {
+  const type = document.getElementById('r-type').value;
+  const cats = type === 'income' ? appData.settings.incomeCategories : appData.settings.expenseCategories;
+  document.getElementById('r-cat').innerHTML = cats.map(c => `<option>${c}</option>`).join('');
+}
+
+function addRecurring() {
+  const desc = document.getElementById('r-desc').value.trim();
+  const amount = parseFloat(document.getElementById('r-amount').value);
+  const type = document.getElementById('r-type').value;
+  const cat = document.getElementById('r-cat').value;
+  const wallet = document.getElementById('r-wallet').value;
+  const freq = document.getElementById('r-freq').value;
+  const start = document.getElementById('r-start').value;
+  if (!desc || !amount || !start) { alert('Fill all fields'); return; }
+  appData.recurring.push({ id: uid(), description: desc, amount, type, category: cat, wallet, freq, start, lastApplied: null });
+  saveData(); renderRecurring();
+}
+
+function renderRecurring() {
+  if (!appData) return;
+  const list = document.getElementById('recurringList');
+  if (!appData.recurring.length) { list.innerHTML = '<div class="empty">No recurring transactions</div>'; return; }
+  list.innerHTML = appData.recurring.map(r => `
+    <div class="tx-item">
+      <div class="tx-icon ${r.type}">${r.type==='income'?'▲':'▼'}</div>
+      <div class="tx-info">
+        <div class="tx-desc">${escHtml(r.description)}</div>
+        <div class="tx-meta">${r.freq} · ${escHtml(r.category)} · ${escHtml(r.wallet)} · from ${r.start}</div>
+      </div>
+      <div class="tx-amount ${r.type}">${r.type==='income'?'+':'-'}${fmt(r.amount)}</div>
+      <button onclick="deleteRecurring('${r.id}')" style="background:none;border:none;cursor:pointer;color:var(--expense);font-size:1.1rem;padding:4px">🗑</button>
+    </div>`).join('');
+}
+
+function deleteRecurring(id) { appData.recurring = appData.recurring.filter(r => r.id !== id); saveData(); renderRecurring(); }
+
+function applyRecurring() {
+  const now = new Date(); now.setHours(0,0,0,0);
+  let count = 0;
+  appData.recurring.forEach(r => {
+    const lastApplied = r.lastApplied ? new Date(r.lastApplied + 'T00:00:00') : null;
+    let cursor = new Date(r.start + 'T00:00:00');
+    while (cursor <= now) {
+      // Only post if this date hasn't been applied yet
+      if (!lastApplied || cursor > lastApplied) {
+        const dateStr = cursor.toISOString().split('T')[0];
+        const tx = { id: uid(), date: dateStr, description: r.description, amount: r.amount, type: r.type, category: r.category, wallet: r.wallet, note:'', isRecurring: true, recurringId: r.id, isSplit: false, splits:[] };
+        appData.transactions.push(tx);
+        r.lastApplied = dateStr;
+        count++;
+      }
+      // Advance to next occurrence
+      if (r.freq === 'monthly') cursor.setMonth(cursor.getMonth() + 1);
+      else if (r.freq === 'weekly') cursor.setDate(cursor.getDate() + 7);
+      else cursor.setFullYear(cursor.getFullYear() + 1);
+    }
+  });
+  appData.transactions.sort((a,b) => b.date.localeCompare(a.date));
+  saveData(); updateSummary(); renderLog(); renderRecurring();
+  alert(count > 0 ? `Applied ${count} recurring transaction(s).` : 'No due transactions.');
+}
+
+// ─── BUDGETS ──────────────────────────────────────────────────────────
+function populateBudgetCats() {
+  const sel = document.getElementById('b-cat');
+  sel.innerHTML = appData.settings.expenseCategories.map(c=>`<option>${c}</option>`).join('');
+}
+
+function addBudget() {
+  const cat = document.getElementById('b-cat').value;
+  const limit = parseFloat(document.getElementById('b-limit').value);
+  if (!limit || limit <= 0) { alert('Enter valid limit'); return; }
+  const existing = appData.budgets.findIndex(b => b.category === cat);
+  if (existing >= 0) appData.budgets[existing].limit = limit;
+  else appData.budgets.push({ id: uid(), category: cat, limit });
+  document.getElementById('b-limit').value = '';
+  saveData(); renderBudgets();
+}
+
+function renderBudgets() {
+  if (!appData) return;
+  populateBudgetCats();
+  const now = new Date();
+  const month = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  const spent = {};
+  appData.transactions.filter(t => t.type === 'expense' && t.date.startsWith(month)).forEach(t => {
+    spent[t.category] = (spent[t.category]||0) + (parseFloat(t.amount)||0);
+  });
+  const list = document.getElementById('budgetList');
+  if (!appData.budgets.length) { list.innerHTML = '<div class="empty">No budgets set</div>'; return; }
+  list.innerHTML = appData.budgets.map(b => {
+    const s = spent[b.category]||0;
+    const pct = Math.min((s/b.limit)*100, 100);
+    const fillClass = pct >= 100 ? 'fill-red' : pct >= 80 ? 'fill-amber' : 'fill-green';
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:600">${escHtml(b.category)}</span>
+        <button onclick="deleteBudget('${b.id}')" style="background:none;border:none;cursor:pointer;color:var(--expense)">🗑</button>
+      </div>
+      <div style="font-size:.85rem;color:var(--text2)">${fmt(s)} / ${fmt(b.limit)}</div>
+      <div class="progress-bar"><div class="progress-fill ${fillClass}" style="width:${pct}%"></div></div>
+      <div style="font-size:.78rem;color:var(--text2)">${pct.toFixed(1)}% used</div>
+    </div>`;
+  }).join('');
+}
+
+function deleteBudget(id) { appData.budgets = appData.budgets.filter(b => b.id !== id); saveData(); renderBudgets(); }
+
+// ─── GOALS ───────────────────────────────────────────────────────────
+function addGoal() {
+  const name = document.getElementById('g-name').value.trim();
+  const target = parseFloat(document.getElementById('g-target').value);
+  const saved = parseFloat(document.getElementById('g-saved').value)||0;
+  const date = document.getElementById('g-date').value;
+  if (!name || !target) { alert('Fill required fields'); return; }
+  appData.goals.push({ id: uid(), name, target, saved, date });
+  ['g-name','g-target','g-saved','g-date'].forEach(id => document.getElementById(id).value='');
+  saveData(); renderGoals();
+}
+
+function renderGoals() {
+  if (!appData) return;
+  const list = document.getElementById('goalList');
+  if (!appData.goals.length) { list.innerHTML = '<div class="empty">No goals yet</div>'; return; }
+  list.innerHTML = appData.goals.map(g => {
+    const pct = Math.min((g.saved/g.target)*100,100);
+    const remaining = Math.max(g.target - g.saved, 0);
+    const daysLeft = g.date ? Math.ceil((new Date(g.date)-new Date())/86400000) : null;
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between">
+        <span style="font-weight:700">${escHtml(g.name)}</span>
+        <button onclick="deleteGoal('${g.id}')" style="background:none;border:none;cursor:pointer;color:var(--expense)">🗑</button>
+      </div>
+      <div style="font-size:.85rem;color:var(--text2);margin:4px 0">${fmt(g.saved)} saved of ${fmt(g.target)} · ${fmt(remaining)} remaining${daysLeft!=null?' · '+daysLeft+' days left':''}</div>
+      <div class="progress-bar"><div class="progress-fill fill-green" style="width:${pct}%"></div></div>
+      <div style="font-size:.78rem;color:var(--text2)">${pct.toFixed(1)}% complete</div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <input type="number" id="gs-${g.id}" placeholder="Update saved" step="0.01" style="flex:1;padding:7px;border:1.5px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+        <button class="btn btn-sm btn-success" onclick="updateGoal('${g.id}')">Update</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updateGoal(id) {
+  const val = parseFloat(document.getElementById('gs-'+id).value);
+  if (isNaN(val)) return;
+  const g = appData.goals.find(g => g.id === id);
+  if (g) { g.saved = val; saveData(); renderGoals(); }
+}
+function deleteGoal(id) { appData.goals = appData.goals.filter(g => g.id !== id); saveData(); renderGoals(); }
+
+// ─── ANALYTICS ───────────────────────────────────────────────────────
+function populateAnalyticsSelectors() {
+  const now = new Date();
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const mSel = document.getElementById('a-month');
+  const ySel = document.getElementById('a-year');
+  mSel.innerHTML = months.map((m,i) => `<option value="${i+1}"${i===now.getMonth()?' selected':''}>${m}</option>`).join('');
+  const years = [];
+  for (let y = now.getFullYear(); y >= now.getFullYear()-5; y--) years.push(y);
+  ySel.innerHTML = years.map(y => `<option${y===now.getFullYear()?' selected':''}>${y}</option>`).join('');
+}
+
+function setAnalyticsPeriod(period) {
+  const now = new Date();
+  let m, y;
+  if (period === 'thisMonth') { m = now.getMonth()+1; y = now.getFullYear(); }
+  else if (period === 'lastMonth') {
+    const d = new Date(now.getFullYear(), now.getMonth()-1);
+    m = d.getMonth()+1; y = d.getFullYear();
+  } else if (period === 'thisYear') { m = 0; y = now.getFullYear(); }
+  else { m = 0; y = now.getFullYear()-1; }
+  if (m) document.getElementById('a-month').value = m;
+  document.getElementById('a-year').value = y;
+  renderAnalytics();
+}
+
+function renderAnalytics() {
+  const mVal = parseInt(document.getElementById('a-month').value);
+  const yVal = parseInt(document.getElementById('a-year').value);
+  let txs;
+  if (!mVal || mVal === 0) {
+    txs = appData.transactions.filter(t => t.date.startsWith(String(yVal)));
+  } else {
+    const prefix = yVal + '-' + String(mVal).padStart(2,'0');
+    txs = appData.transactions.filter(t => t.date.startsWith(prefix));
+  }
+  const incomeBycat = {}, expBycat = {};
+  let totalInc = 0, totalExp = 0;
+  txs.forEach(t => {
+    const amt = parseFloat(t.amount)||0;
+    if (t.type === 'income') { incomeBycat[t.category] = (incomeBycat[t.category]||0)+amt; totalInc+=amt; }
+    else { expBycat[t.category] = (expBycat[t.category]||0)+amt; totalExp+=amt; }
+  });
+  const catBar = (cat, amt, total) => {
+    const pct = total > 0 ? (amt/total*100) : 0;
+    return `<div style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-size:.85rem"><span>${escHtml(cat)}</span><span>${fmt(amt)} (${pct.toFixed(1)}%)</span></div>
+      <div class="progress-bar"><div class="progress-fill fill-green" style="width:${pct}%"></div></div>
+    </div>`;
+  };
+  const res = document.getElementById('analyticsResult');
+  res.innerHTML = `
+    <div class="card"><div class="card-title">Income (${fmt(totalInc)})</div>${Object.entries(incomeBycat).sort((a,b)=>b[1]-a[1]).map(([c,a])=>catBar(c,a,totalInc)).join('')||'<div class="empty">No income</div>'}</div>
+    <div class="card"><div class="card-title">Expenses (${fmt(totalExp)})</div>${Object.entries(expBycat).sort((a,b)=>b[1]-a[1]).map(([c,a])=>catBar(c,a,totalExp)).join('')||'<div class="empty">No expenses</div>'}</div>
+    <div class="card"><div class="card-title">Transactions (${txs.length})</div>${txs.map(t=>txItem(t,false)).join('')||'<div class="empty">None</div>'}</div>`;
+}
+
+// ─── YOY ─────────────────────────────────────────────────────────────
+function renderYoY() {
+  const now = new Date();
+  const thisYear = now.getFullYear();
+  const lastYear = thisYear - 1;
+  const ytdStr = now.toISOString().split('T')[0];
+  const ytdLastYear = String(lastYear) + ytdStr.slice(4);
+  const cats = appData.settings.expenseCategories;
+  const thisYTD = {}, lastYTD = {}, lastFull = {};
+  let thisTotalYTD = 0, lastTotalYTD = 0, lastTotalFull = 0;
+  appData.transactions.filter(t => t.type === 'expense').forEach(t => {
+    const amt = parseFloat(t.amount)||0;
+    if (t.date.startsWith(String(thisYear)) && t.date <= ytdStr) { thisYTD[t.category]=(thisYTD[t.category]||0)+amt; thisTotalYTD+=amt; }
+    if (t.date.startsWith(String(lastYear)) && t.date <= ytdLastYear) { lastYTD[t.category]=(lastYTD[t.category]||0)+amt; lastTotalYTD+=amt; }
+    if (t.date.startsWith(String(lastYear))) { lastFull[t.category]=(lastFull[t.category]||0)+amt; lastTotalFull+=amt; }
+  });
+  const allCats = [...new Set([...Object.keys(thisYTD),...Object.keys(lastYTD),...Object.keys(lastFull)])].sort();
+  const rows = allCats.map(c => {
+    const ty = thisYTD[c]||0, ly = lastYTD[c]||0, lf = lastFull[c]||0;
+    const chg = ly > 0 ? ((ty-ly)/ly*100) : (ty>0 ? 100 : 0);
+    const chgClass = ty <= ly ? 'change-down' : 'change-up';
+    const arrow = ty <= ly ? '▼' : '▲';
+    return `<tr><td>${escHtml(c)}</td><td>${fmt(ty)}</td><td>${fmt(ly)}</td><td>${fmt(lf)}</td><td class="${chgClass}">${arrow} ${Math.abs(chg).toFixed(1)}%</td></tr>`;
+  }).join('');
+  const savingsChange = lastTotalYTD > 0 ? ((thisTotalYTD-lastTotalYTD)/lastTotalYTD*100) : 0;
+  document.getElementById('yoyContent').innerHTML = `
+    <div class="card">
+      <div class="yoy-table-wrap">
+      <table class="yoy-table">
+        <thead><tr><th>Category</th><th>${thisYear} YTD</th><th>${lastYear} YTD</th><th>${lastYear} Full</th><th>Change</th></tr></thead>
+        <tbody>${rows||'<tr><td colspan="5" style="text-align:center;color:var(--text2)">No data</td></tr>'}</tbody>
+      </table>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+      <div class="metric-card"><div class="label">${thisYear} YTD Expenses</div><div class="value exp">${fmt(thisTotalYTD)}</div></div>
+      <div class="metric-card"><div class="label">${lastYear} YTD Expenses</div><div class="value">${fmt(lastTotalYTD)}</div></div>
+      <div class="metric-card"><div class="label">YTD Change</div><div class="value ${thisTotalYTD<=lastTotalYTD?'inc':'exp'}">${thisTotalYTD<=lastTotalYTD?'▼':'▲'} ${Math.abs(savingsChange).toFixed(1)}%</div></div>
+    </div>`;
+}
+
+// ─── NET WORTH ───────────────────────────────────────────────────────
+function addLiability() {
+  const desc = document.getElementById('l-desc').value.trim();
+  const amount = parseFloat(document.getElementById('l-amount').value);
+  if (!desc || !amount) { alert('Fill all fields'); return; }
+  appData.liabilities.push({ id: uid(), description: desc, amount });
+  document.getElementById('l-desc').value = '';
+  document.getElementById('l-amount').value = '';
+  saveData(); renderNetWorth();
+}
+
+function renderNetWorth() {
+  if (!appData) return;
+  const ob = appData.settings.openingBalances||{};
+  const wallets = { Cash: ob.cash||0, 'Cash savings': ob.savings||0, Investments: ob.investments||0 };
+  appData.transactions.forEach(t => {
+    const amt = parseFloat(t.amount)||0;
+    wallets[t.wallet] = (wallets[t.wallet]||0) + (t.type==='income'?amt:-amt);
+  });
+  const totalAssets = wallets['Cash']+wallets['Cash savings']+wallets['Investments'];
+  const totalLiab = appData.liabilities.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
+  const nw = totalAssets - totalLiab;
+  const cards = document.getElementById('networthCards');
+  cards.innerHTML = `
+    <div class="metric-card"><div class="label">Total Assets</div><div class="value inc">${fmt(totalAssets)}</div></div>
+    <div class="metric-card"><div class="label">Total Liabilities</div><div class="value exp">${fmt(totalLiab)}</div></div>
+    <div class="metric-card"><div class="label">Net Worth</div><div class="value" style="color:${nw>=0?'var(--income)':'var(--expense)'}">${fmt(nw)}</div></div>`;
+  const liabList = document.getElementById('liabilityList');
+  if (!appData.liabilities.length) { liabList.innerHTML = '<div class="empty">No liabilities</div>'; }
+  else {
+    liabList.innerHTML = appData.liabilities.map(l => `
+      <div class="tx-item">
+        <div class="tx-icon expense">📉</div>
+        <div class="tx-info"><div class="tx-desc">${escHtml(l.description)}</div></div>
+        <div class="tx-amount expense">-${fmt(l.amount)}</div>
+        <button onclick="deleteLiability('${l.id}')" style="background:none;border:none;cursor:pointer;color:var(--expense);font-size:1.1rem">🗑</button>
+      </div>`).join('');
+  }
+  renderNWChart();
+}
+
+function deleteLiability(id) { appData.liabilities=appData.liabilities.filter(l=>l.id!==id); saveData(); renderNetWorth(); }
+
+function recordNetWorth() {
+  const ob = appData.settings.openingBalances||{};
+  const wallets = { Cash: ob.cash||0, 'Cash savings': ob.savings||0, Investments: ob.investments||0 };
+  appData.transactions.forEach(t => {
+    const amt = parseFloat(t.amount)||0;
+    wallets[t.wallet] = (wallets[t.wallet]||0)+(t.type==='income'?amt:-amt);
+  });
+  const totalAssets = wallets['Cash']+wallets['Cash savings']+wallets['Investments'];
+  const totalLiab = appData.liabilities.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
+  const nw = totalAssets - totalLiab;
+  const mo = today().slice(0,7);
+  const existing = appData.netWorthHistory.findIndex(h=>h.month===mo);
+  if (existing>=0) appData.netWorthHistory[existing].value=nw;
+  else appData.netWorthHistory.push({ month: mo, value: nw });
+  appData.netWorthHistory.sort((a,b)=>a.month.localeCompare(b.month));
+}
+
+function renderNWChart() {
+  const ctx = document.getElementById('nwChart').getContext('2d');
+  if (nwChartInst) nwChartInst.destroy();
+  const hist = appData.netWorthHistory.slice(-24);
+  nwChartInst = new Chart(ctx, {
+    type: 'line',
+    data: { labels: hist.map(h=>h.month), datasets: [{ label:'Net Worth', data: hist.map(h=>h.value), borderColor:'#4f46e5', backgroundColor:'rgba(79,70,229,0.1)', tension:0.3, fill:true }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ y:{ ticks:{ callback: v => appData.settings.currency+' '+v } } } }
+  });
+}
+
+// ─── SUMMARY TAB ─────────────────────────────────────────────────────
+function populateSummarySelectors() {
+  const now = new Date();
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('s-month').innerHTML = months.map((m,i)=>`<option value="${i+1}"${i===now.getMonth()?' selected':''}>${m}</option>`).join('');
+  const ySel = document.getElementById('s-year');
+  let opts='';
+  for(let y=now.getFullYear();y>=now.getFullYear()-5;y--) opts+=`<option${y===now.getFullYear()?' selected':''}>${y}</option>`;
+  ySel.innerHTML = opts;
+}
+
+function renderSummary() {
+  const m = parseInt(document.getElementById('s-month').value);
+  const y = parseInt(document.getElementById('s-year').value);
+  const prefix = y + '-' + String(m).padStart(2,'0');
+  const txs = appData.transactions.filter(t=>t.date.startsWith(prefix));
+  let inc=0, exp=0;
+  const incCats={}, expCats={};
+  txs.forEach(t => {
+    const amt=parseFloat(t.amount)||0;
+    if(t.type==='income'){inc+=amt; incCats[t.category]=(incCats[t.category]||0)+amt;}
+    else{exp+=amt; expCats[t.category]=(expCats[t.category]||0)+amt;}
+  });
+  const net=inc-exp;
+  const catRows=(obj,total)=>Object.entries(obj).sort((a,b)=>b[1]-a[1]).map(([c,a])=>`
+    <div style="display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:6px">
+      <span>${escHtml(c)}</span><span>${fmt(a)} (${total>0?(a/total*100).toFixed(1):0}%)</span>
+    </div>`).join('');
+  document.getElementById('summaryResult').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+      <div class="metric-card"><div class="label">Income</div><div class="value inc">${fmt(inc)}</div></div>
+      <div class="metric-card"><div class="label">Expenses</div><div class="value exp">${fmt(exp)}</div></div>
+      <div class="metric-card"><div class="label">Net</div><div class="value" style="color:${net>=0?'var(--income)':'var(--expense)'}">${fmt(net)}</div></div>
+    </div>
+    <div class="card"><div class="card-title">Income by Category</div>${catRows(incCats,inc)||'<div class="empty">None</div>'}</div>
+    <div class="card"><div class="card-title">Expenses by Category</div>${catRows(expCats,exp)||'<div class="empty">None</div>'}</div>
+    <div class="card"><div class="card-title">All Transactions (${txs.length})</div>${txs.map(t=>txItem(t,false)).join('')||'<div class="empty">None</div>'}</div>`;
+}
+
+// ─── CALENDAR ────────────────────────────────────────────────────────
+function calNav(dir) {
+  calMonth += dir;
+  if (calMonth > 11) { calMonth=0; calYear++; }
+  if (calMonth < 0) { calMonth=11; calYear--; }
+  const minYear = new Date().getFullYear()-5;
+  if (calYear < minYear) { calYear=minYear; calMonth=0; }
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('calTitle').textContent = months[calMonth]+' '+calYear;
+  const firstDay = new Date(calYear,calMonth,1).getDay();
+  const daysInMonth = new Date(calYear,calMonth+1,0).getDate();
+  const todayStr = today();
+  const prefix = calYear+'-'+String(calMonth+1).padStart(2,'0');
+  const dayData={};
+  appData.transactions.filter(t=>t.date.startsWith(prefix)).forEach(t=>{
+    const d=t.date.slice(8);
+    if(!dayData[d])dayData[d]={inc:0,exp:0,txs:[]};
+    const amt=parseFloat(t.amount)||0;
+    if(t.type==='income')dayData[d].inc+=amt; else dayData[d].exp+=amt;
+    dayData[d].txs.push(t);
+  });
+  const headers=['Su','Mo','Tu','We','Th','Fr','Sa'].map(d=>`<div class="cal-day-header">${d}</div>`).join('');
+  let cells=headers;
+  for(let i=0;i<firstDay;i++) cells+=`<div class="cal-day empty"></div>`;
+  for(let d=1;d<=daysInMonth;d++){
+    const ds=String(d).padStart(2,'0');
+    const fullDate=prefix+'-'+ds;
+    const data=dayData[ds]||{};
+    const isToday=fullDate===todayStr?' today':'';
+    cells+=`<div class="cal-day${isToday}" onclick="showCalDay('${fullDate}')">
+      <div class="day-num">${d}</div>
+      ${data.inc?`<div class="day-inc">+${fmt(data.inc)}</div>`:''}
+      ${data.exp?`<div class="day-exp">-${fmt(data.exp)}</div>`:''}
+    </div>`;
+  }
+  document.getElementById('calGrid').innerHTML = cells;
+  document.getElementById('calDayDetail').style.display='none';
+}
+
+function showCalDay(dateStr) {
+  const txs=appData.transactions.filter(t=>t.date===dateStr);
+  const det=document.getElementById('calDayDetail');
+  if(!txs.length){det.style.display='none';return;}
+  det.style.display='block';
+  det.innerHTML=`<div class="card-title">${dateStr}</div>`+txs.map(t=>txItem(t,false)).join('');
+}
+
+// ─── CHARTS ──────────────────────────────────────────────────────────
+function renderCharts() {
+  renderBarChart();
+  renderDonutChart();
+  renderHBarChart();
+}
+
+function renderBarChart() {
+  const ctx = document.getElementById('barChart').getContext('2d');
+  if (barChartInst) barChartInst.destroy();
+  const now = new Date();
+  const labels=[], incData=[], expData=[];
+  for(let i=23;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    const prefix=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    labels.push(prefix);
+    let inc=0,exp=0;
+    appData.transactions.filter(t=>t.date.startsWith(prefix)).forEach(t=>{
+      if(t.type==='income')inc+=parseFloat(t.amount)||0; else exp+=parseFloat(t.amount)||0;
+    });
+    incData.push(inc); expData.push(exp);
+  }
+  barChartInst = new Chart(ctx,{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'Income',data:incData,backgroundColor:'rgba(16,185,129,0.7)'},
+      {label:'Expenses',data:expData,backgroundColor:'rgba(239,68,68,0.7)'}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{ticks:{maxRotation:45,font:{size:10}}},y:{ticks:{callback:v=>appData.settings.currency+' '+v}}}}
+  });
+}
+
+function renderDonutChart() {
+  const ctx = document.getElementById('donutChart').getContext('2d');
+  if (donutInst) donutInst.destroy();
+  const ob = appData.settings.openingBalances||{};
+  const wallets = { Cash: ob.cash||0, 'Cash savings': ob.savings||0, Investments: ob.investments||0 };
+  appData.transactions.forEach(t=>{
+    const amt=parseFloat(t.amount)||0;
+    wallets[t.wallet]=(wallets[t.wallet]||0)+(t.type==='income'?amt:-amt);
+  });
+  donutInst = new Chart(ctx,{
+    type:'doughnut',
+    data:{labels:Object.keys(wallets),datasets:[{data:Object.values(wallets).map(v=>Math.max(v,0)),backgroundColor:['#4f46e5','#10b981','#f59e0b']}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}
+  });
+}
+
+function renderHBarChart() {
+  const ctx = document.getElementById('hbarChart').getContext('2d');
+  if (hbarInst) hbarInst.destroy();
+  const expBycat={};
+  appData.transactions.filter(t=>t.type==='expense').forEach(t=>{expBycat[t.category]=(expBycat[t.category]||0)+(parseFloat(t.amount)||0);});
+  const sorted=Object.entries(expBycat).sort((a,b)=>b[1]-a[1]);
+  hbarInst = new Chart(ctx,{
+    type:'bar',
+    data:{labels:sorted.map(e=>e[0]),datasets:[{label:'Expenses',data:sorted.map(e=>e[1]),backgroundColor:'rgba(239,68,68,0.7)'}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{callback:v=>appData.settings.currency+' '+v}}}}
+  });
+}
+
+// ─── SETTINGS ────────────────────────────────────────────────────────
+function loadOpeningBalances() {
+  const ob = appData.settings.openingBalances||{};
+  document.getElementById('ob-cash').value = ob.cash||0;
+  document.getElementById('ob-savings').value = ob.savings||0;
+  document.getElementById('ob-invest').value = ob.investments||0;
+}
+
+function saveOpeningBalances() {
+  appData.settings.openingBalances = {
+    cash: parseFloat(document.getElementById('ob-cash').value)||0,
+    savings: parseFloat(document.getElementById('ob-savings').value)||0,
+    investments: parseFloat(document.getElementById('ob-invest').value)||0
+  };
+  saveData(); updateSummary();
+}
+
+function renderCategorySettings() {
+  if (!appData) return;
+  const incList = document.getElementById('incCatList');
+  const expList = document.getElementById('expCatList');
+  incList.innerHTML = appData.settings.incomeCategories.map(c=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>${escHtml(c)}</span><button onclick="deleteCategory('income','${escHtml(c)}')" style="background:none;border:none;cursor:pointer;color:var(--expense)">✕</button></div>`).join('');
+  expList.innerHTML = appData.settings.expenseCategories.map(c=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>${escHtml(c)}</span><button onclick="deleteCategory('expense','${escHtml(c)}')" style="background:none;border:none;cursor:pointer;color:var(--expense)">✕</button></div>`).join('');
+}
+
+function addCategory(type) {
+  const input = document.getElementById(type==='income'?'newIncCat':'newExpCat');
+  const val = input.value.trim();
+  if (!val) return;
+  const cats = type==='income' ? appData.settings.incomeCategories : appData.settings.expenseCategories;
+  if (!cats.includes(val)) cats.push(val);
+  input.value='';
+  saveData(); renderCategorySettings(); renderQuickPills(); populateSelectors(); renderBudgets();
+}
+
+function deleteCategory(type, cat) {
+  if (type==='income') appData.settings.incomeCategories = appData.settings.incomeCategories.filter(c=>c!==cat);
+  else appData.settings.expenseCategories = appData.settings.expenseCategories.filter(c=>c!==cat);
+  saveData(); renderCategorySettings(); renderQuickPills(); populateSelectors();
+}
+
+function changePassword() {
+  const oldPw = document.getElementById('cpOld').value;
+  const newPw = document.getElementById('cpNew').value;
+  const conf = document.getElementById('cpConfirm').value;
+  const msg = document.getElementById('cpMsg');
+  const salt = localStorage.getItem(SALT_KEY);
+  if (hashPassword(oldPw,salt) !== localStorage.getItem(HASH_KEY)) { msg.style.color='var(--expense)'; msg.textContent='Current password incorrect.'; return; }
+  if (!passwordValid(newPw)) { msg.style.color='var(--expense)'; msg.textContent='New password does not meet requirements.'; return; }
+  if (newPw !== conf) { msg.style.color='var(--expense)'; msg.textContent='Passwords do not match.'; return; }
+  const newSalt = CryptoJS.lib.WordArray.random(128/8).toString();
+  localStorage.setItem(SALT_KEY, newSalt);
+  localStorage.setItem(HASH_KEY, hashPassword(newPw, newSalt));
+  sessionKey = deriveKey(newPw, newSalt);
+  saveData();
+  msg.style.color='var(--income)'; msg.textContent='Password updated successfully.';
+  ['cpOld','cpNew','cpConfirm'].forEach(id=>document.getElementById(id).value='');
+}
+
+function triggerSettingsImport() {
+  document.getElementById('settingsBackupFile').value = '';
+  document.getElementById('settingsImportArea').style.display = 'none';
+  document.getElementById('settingsImportMsg').textContent = '';
+  document.getElementById('settingsBackupFile').click();
+}
+function onSettingsBackupSelected() {
+  const file = document.getElementById('settingsBackupFile').files[0];
+  if (!file) return;
+  document.getElementById('settingsImportPw').value = '';
+  document.getElementById('settingsImportMsg').textContent = '';
+  document.getElementById('settingsImportArea').style.display = 'block';
+  document.getElementById('settingsImportPw').focus();
+}
+function cancelSettingsImport() {
+  document.getElementById('settingsImportArea').style.display = 'none';
+  document.getElementById('settingsBackupFile').value = '';
+}
+function doSettingsImport() {
+  const file = document.getElementById('settingsBackupFile').files[0];
+  const pw = document.getElementById('settingsImportPw').value;
+  const msg = document.getElementById('settingsImportMsg');
+  if (!file || !pw) { msg.style.color='var(--expense)'; msg.textContent='Select a file and enter a password.'; return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    let enc, backupSalt;
+    try {
+      const parsed = JSON.parse(e.target.result.trim());
+      enc = parsed.data; backupSalt = parsed.salt;
+    } catch(_) {
+      enc = e.target.result.trim();
+      backupSalt = localStorage.getItem(SALT_KEY) || CryptoJS.lib.WordArray.random(128/8).toString();
+    }
+    const key = deriveKey(pw, backupSalt);
+    const data = decrypt(enc, key);
+    if (!data) { msg.style.color='var(--expense)'; msg.textContent='Import failed — incorrect password or invalid file'; return; }
+    const newSalt = CryptoJS.lib.WordArray.random(128/8).toString();
+    localStorage.setItem(SALT_KEY, newSalt);
+    localStorage.setItem(HASH_KEY, hashPassword(pw, newSalt));
+    sessionKey = deriveKey(pw, newSalt);
+    appData = Object.assign(defaultData(), data);
+    saveData();
+    startApp();
+  };
+  reader.readAsText(file);
+}
+
+function downloadBlob(blob, filename) {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if (isIOS) {
+    // iOS Safari ignores the download attribute; open data URL in new tab so user can share to Files
+    const reader = new FileReader();
+    reader.onload = () => window.open(reader.result);
+    reader.readAsDataURL(blob);
+  } else {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  }
+}
+
+function exportBackup() {
+  const salt = localStorage.getItem(SALT_KEY);
+  const payload = JSON.stringify({ salt, data: encrypt(appData, sessionKey) });
+  downloadBlob(new Blob([payload], {type:'text/plain'}), 'finance-backup-'+today()+'.enc');
+}
+
+function exportCSV() {
+  const rows = [['Date','Type','Description','Category','Wallet','Amount','Currency']];
+  appData.transactions.forEach(t => rows.push([t.date,t.type,t.description,t.category,t.wallet,t.amount,appData.settings.currency]));
+  const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  downloadBlob(new Blob([csv], {type:'text/csv'}), 'finance-export-'+today()+'.csv');
+}
+
+// ─── SELECTORS ───────────────────────────────────────────────────────
+function populateSelectors() {
+  if (!appData) return;
+  renderFECategories();
+  renderRCats();
+  populateBudgetCats();
+}
+
+function showMsg(id, text, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = type === 'success' ? 'var(--income)' : 'var(--expense)';
+  setTimeout(()=>el.textContent='', 3000);
+}
+
+// ─── GOOGLE DRIVE SYNC ───────────────────────────────────────────────
+// DEVELOPER NOTE: Add this Authorised redirect URI in Google Cloud Console
+// → APIs & Services → Credentials → OAuth 2.0 Client ID:
+//   https://vladimirjaksicmck.github.io/finance-tracker/finance-tracker.html
+const DRIVE_CLIENT_ID = '416374750017-aksd980ko28626cc9bn008ha2r61rbga.apps.googleusercontent.com';
+const DRIVE_REDIRECT_URI = 'https://vladimirjaksicmck.github.io/finance-tracker/finance-tracker.html';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const DRIVE_FILENAME = 'finance-tracker-backup.enc';
+const DRV = {
+  TOKEN:           'ft_drive_token',
+  EXPIRY:          'ft_drive_token_expiry',
+  FILE_ID:         'ft_drive_file_id',
+  EMAIL:           'ft_drive_email',
+  LAST:            'ft_drive_last_sync',
+  AUTO:            'ft_drive_autosync',
+  PENDING_CONNECT: 'ft_drive_pending_connect',
+};
+
+let _driveToken = null;
+let _drivePendingLoad = null;
+let _driveConnectFileId = null;
+
+function _parseOAuthHash() {
+  const hash = window.location.hash.slice(1);
+  if (!hash.includes('access_token=')) return;
+  const p = new URLSearchParams(hash);
+  const token = p.get('access_token');
+  const expiresIn = parseInt(p.get('expires_in') || '3600');
+  if (token) {
+    localStorage.setItem(DRV.TOKEN, token);
+    localStorage.setItem(DRV.EXPIRY, String(Date.now() + expiresIn * 1000 - 60000));
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+}
+
+function initDriveSync() {
+  _parseOAuthHash();
+  const saved = localStorage.getItem(DRV.TOKEN);
+  const expiry = parseInt(localStorage.getItem(DRV.EXPIRY) || '0');
+  if (saved && Date.now() < expiry) _driveToken = saved;
+  renderDriveSettings();
+  updateSyncCloud();
+  if (_driveToken && localStorage.getItem(DRV.PENDING_CONNECT)) {
+    localStorage.removeItem(DRV.PENDING_CONNECT);
+    fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + _driveToken } })
+      .then(r => r.json())
+      .then(info => { localStorage.setItem(DRV.EMAIL, info.email || ''); renderDriveSettings(); })
+      .catch(() => {})
+      .finally(() => _checkOnConnect());
+  }
+}
+
+function connectDrive() {
+  localStorage.setItem(DRV.PENDING_CONNECT, '1');
+  const params = new URLSearchParams({
+    client_id:     DRIVE_CLIENT_ID,
+    redirect_uri:  DRIVE_REDIRECT_URI,
+    response_type: 'token',
+    scope:         DRIVE_SCOPE,
+  });
+  window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
+}
+
+function disconnectDrive() {
+  _driveToken = null;
+  Object.values(DRV).forEach(k => localStorage.removeItem(k));
+  renderDriveSettings();
+  updateSyncCloud();
+}
+
+async function _ensureToken() {
+  const expiry = parseInt(localStorage.getItem(DRV.EXPIRY) || '0');
+  if (_driveToken && Date.now() < expiry) return true;
+  // Token expired — clear and surface error; user must reconnect
+  _driveToken = null;
+  updateSyncCloud('error');
+  return false;
+}
+
+async function _checkOnConnect() {
+  try {
+    const fileId = await _findFile();
+    if (fileId) {
+      _driveConnectFileId = fileId;
+      document.getElementById('driveConnectModal').style.display = 'flex';
+    } else {
+      await saveToDrive();
+    }
+  } catch(e) { _driveError('Sync failed — will retry on next save'); }
+}
+
+function _driveConnectRestore() {
+  document.getElementById('driveConnectModal').style.display = 'none';
+  loadFromDrive(_driveConnectFileId);
+}
+
+function _driveConnectOverwrite() {
+  document.getElementById('driveConnectModal').style.display = 'none';
+  localStorage.setItem(DRV.FILE_ID, _driveConnectFileId);
+  saveToDrive();
+}
+
+async function _findFile() {
+  const q = encodeURIComponent(`name='${DRIVE_FILENAME}' and trashed=false`);
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`,
+    { headers: { Authorization: 'Bearer ' + _driveToken } });
+  if (!r.ok) throw new Error('list failed');
+  const d = await r.json();
+  return d.files && d.files.length ? d.files[0].id : null;
+}
+
+async function _downloadAndDecrypt(fileId) {
+  console.log('[Drive] Download starting, fileId:', fileId);
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+    { headers: { Authorization: 'Bearer ' + _driveToken } });
+  if (!r.ok) throw new Error('download failed: HTTP ' + r.status);
+  const text = await r.text();
+  console.log('[Drive] Downloaded', text.length, 'bytes');
+
+  let enc, backupSalt;
+  try {
+    const p = JSON.parse(text);
+    enc = p.data; backupSalt = p.salt;
+    console.log('[Drive] Format: JSON {salt,data} — salt prefix:', backupSalt ? backupSalt.slice(0,8) : 'MISSING', '— enc length:', enc ? enc.length : 0);
+  } catch(_) {
+    enc = text.trim(); backupSalt = localStorage.getItem(SALT_KEY);
+    console.log('[Drive] Format: legacy raw ciphertext — using local salt');
+  }
+
+  const localSalt = localStorage.getItem(SALT_KEY);
+  console.log('[Drive] Local salt prefix :', localSalt ? localSalt.slice(0,8) : 'NONE');
+  console.log('[Drive] Backup salt prefix:', backupSalt ? backupSalt.slice(0,8) : 'NONE');
+  console.log('[Drive] Salts match:', backupSalt === localSalt);
+
+  // Same device — decrypt directly with current sessionKey
+  if (backupSalt === localSalt) {
+    console.log('[Drive] Trying same-device decrypt (sessionKey)');
+    const data = decrypt(enc, sessionKey);
+    if (data) {
+      console.log('[Drive] Same-device decrypt OK — keys:', Object.keys(data));
+      return { data, fileId, pw: null, backupSalt };
+    }
+    console.log('[Drive] Same-device decrypt FAILED');
+  }
+
+  // Different device — re-derive key using backup salt + session password
+  const sessionPw = sessionStorage.getItem('ft_session_pw');
+  console.log('[Drive] sessionStorage password available:', !!sessionPw);
+  if (sessionPw) {
+    console.log('[Drive] Trying cross-device decrypt (sessionPw + backupSalt)');
+    const key = deriveKey(sessionPw, backupSalt);
+    const data = decrypt(enc, key);
+    if (data) {
+      console.log('[Drive] Cross-device decrypt OK — keys:', Object.keys(data));
+      return { data, fileId, pw: sessionPw, backupSalt };
+    }
+    console.log('[Drive] Cross-device decrypt FAILED');
+  }
+
+  // No password available — prompt the user
+  console.log('[Drive] Falling back to password modal');
+  return new Promise(resolve => {
+    _drivePendingLoad = { enc, backupSalt, fileId, resolve };
+    document.getElementById('drivePwModalInput').value = '';
+    document.getElementById('drivePwModalMsg').textContent = '';
+    document.getElementById('drivePwModal').style.display = 'flex';
+    document.getElementById('drivePwModalInput').focus();
+  });
+}
+
+async function saveToDrive() {
+  if (!_driveToken) return;
+  if (!await _ensureToken()) { _driveError('Sync failed — will retry on next save'); return; }
+
+  // Verify we have real data before uploading
+  const txCount = (appData && appData.transactions) ? appData.transactions.length : 0;
+  console.log('[Drive] saveToDrive — transaction count:', txCount);
+  if (txCount === 0) {
+    console.log('[Drive] No transactions found — aborting upload');
+    showDriveMsg('No data to sync — please add transactions first', 'error');
+    return;
+  }
+
+  updateSyncCloud('syncing');
+  try {
+    const salt = localStorage.getItem(SALT_KEY);
+    const payload = JSON.stringify({ salt, data: encrypt(appData, sessionKey) });
+    console.log('[Drive] Payload size:', payload.length, 'bytes — transactions:', txCount);
+
+    const existingId = localStorage.getItem(DRV.FILE_ID);
+    let fileId;
+    if (existingId) {
+      const r = await fetch(
+        `https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=media`,
+        { method: 'PATCH', headers: { Authorization: 'Bearer ' + _driveToken, 'Content-Type': 'text/plain' }, body: payload });
+      if (!r.ok) throw new Error('upload failed: HTTP ' + r.status);
+      fileId = existingId;
+    } else {
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify({ name: DRIVE_FILENAME })], { type: 'application/json' }));
+      form.append('file', new Blob([payload], { type: 'text/plain' }));
+      const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+        { method: 'POST', headers: { Authorization: 'Bearer ' + _driveToken }, body: form });
+      if (!r.ok) throw new Error('create failed: HTTP ' + r.status);
+      fileId = (await r.json()).id;
+    }
+
+    // Verify the upload actually persisted the right amount of data
+    console.log('[Drive] Verifying upload, fileId:', fileId);
+    const verify = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?fields=size`,
+      { headers: { Authorization: 'Bearer ' + _driveToken } });
+    if (verify.ok) {
+      const size = parseInt((await verify.json()).size || '0');
+      console.log('[Drive] Upload verified — file size on Drive:', size, 'bytes');
+      if (size <= 1000) throw new Error('verification failed: file is only ' + size + ' bytes');
+    }
+
+    localStorage.setItem(DRV.FILE_ID, fileId);
+    localStorage.setItem(DRV.LAST, new Date().toISOString());
+    updateSyncCloud('synced');
+    renderDriveLastSync();
+    showDriveMsg('Sync complete — Google Drive updated with local data', 'success');
+  } catch(e) {
+    console.error('[Drive] saveToDrive error:', e.message);
+    if (e.message.startsWith('verification failed')) {
+      _driveError('Sync failed — data was not saved correctly');
+    } else {
+      _driveError('Sync failed — will retry on next save');
+    }
+  }
+}
+
+async function loadFromDrive(fileId) {
+  if (!_driveToken) return;
+  if (!await _ensureToken()) { _driveError('Sync failed'); return; }
+  updateSyncCloud('syncing');
+  try {
+    const id = fileId || localStorage.getItem(DRV.FILE_ID);
+    if (!id) { await saveToDrive(); return; }
+    const result = await _downloadAndDecrypt(id);
+    if (!result) { _driveError('Could not decrypt Drive backup'); return; }
+    _applyDriveData(result.data, result.fileId, result.pw, result.backupSalt);
+  } catch(e) { _driveError('Sync failed — will retry on next save'); }
+}
+
+function drivePwSubmit() {
+  if (!_drivePendingLoad) return;
+  const pw = document.getElementById('drivePwModalInput').value;
+  if (!pw) return;
+  const key = deriveKey(pw, _drivePendingLoad.backupSalt);
+  const data = decrypt(_drivePendingLoad.enc, key);
+  if (!data) {
+    document.getElementById('drivePwModalMsg').textContent =
+      'Restore failed — the backup could not be decrypted. Please ensure you are using the same password on both devices.';
+    return;
+  }
+  document.getElementById('drivePwModal').style.display = 'none';
+  const { resolve, fileId, backupSalt } = _drivePendingLoad;
+  _drivePendingLoad = null;
+  resolve({ data, fileId, pw, backupSalt });
+}
+
+function drivePwCancel() {
+  if (_drivePendingLoad) {
+    _drivePendingLoad.resolve(null);
+    _drivePendingLoad = null;
+  }
+  document.getElementById('drivePwModal').style.display = 'none';
+  updateSyncCloud('error');
+}
+
+function _applyDriveData(data, fileId, pw, backupSalt) {
+  console.log('[Drive] _applyDriveData — fileId:', fileId, '— cross-device:', !!pw);
+  console.log('[Drive] Data keys:', Object.keys(data));
+  const txCount = (data.transactions || []).length;
+  console.log('[Drive] Transaction count:', txCount);
+
+  if (pw && backupSalt) {
+    // Cross-device: use the BACKUP's salt, not a new random one
+    console.log('[Drive] Writing SALT_KEY ←', backupSalt.slice(0,8) + '...');
+    localStorage.setItem(SALT_KEY, backupSalt);
+    localStorage.setItem(HASH_KEY, hashPassword(pw, backupSalt));
+    sessionKey = deriveKey(pw, backupSalt);
+    sessionStorage.setItem('ft_session_pw', pw);
+  }
+
+  const merged = Object.assign(defaultData(), data);
+  const enc = encrypt(merged, sessionKey);
+
+  console.log('[Drive] Writing localStorage:');
+  console.log('[Drive]   ', STORAGE_KEY, '← encrypted data,', enc.length, 'chars');
+  console.log('[Drive]   ', DRV.FILE_ID, '←', fileId);
+  console.log('[Drive]   ', DRV.LAST, '← now');
+
+  localStorage.setItem(STORAGE_KEY, enc);
+  localStorage.setItem(DRV.FILE_ID, fileId);
+  localStorage.setItem(DRV.LAST, new Date().toISOString());
+
+  updateSyncCloud('synced');
+  console.log('[Drive] Restore written to localStorage — showing modal then reloading');
+  _showRestoreCompleteModal(txCount);
+}
+
+function _showRestoreCompleteModal(txCount) {
+  document.getElementById('driveRestoreCount').textContent = txCount;
+  document.getElementById('driveRestoreModal').style.display = 'flex';
+}
+
+function _driveRestoreReload() {
+  document.getElementById('driveRestoreModal').style.display = 'none';
+  window.location.reload();
+}
+
+async function syncNow() {
+  if (!_driveToken) { showDriveMsg('Not connected to Google Drive', 'error'); return; }
+  if (!await _ensureToken()) { _driveError('Token expired — reconnect Google Drive in Settings'); return; }
+  updateSyncCloud('syncing');
+  try {
+    const id = localStorage.getItem(DRV.FILE_ID) || await _findFile();
+    if (!id) { await saveToDrive(); return; }
+    // Download Drive copy and compare timestamps
+    const result = await _downloadAndDecrypt(id);
+    if (!result) { _driveError('Could not decrypt Drive backup'); return; }
+    const driveModified = result.data.lastModified || 0;
+    const localModified = appData.lastModified || 0;
+    if (driveModified > localModified) {
+      _applyDriveData(result.data, id, result.pw, result.backupSalt);
+    } else {
+      localStorage.setItem(DRV.FILE_ID, id);
+      await saveToDrive();
+    }
+  } catch(e) { _driveError('Sync failed — will retry on next save'); }
+}
+
+function toggleAutoSync() {
+  localStorage.setItem(DRV.AUTO, document.getElementById('driveAutoSync').checked ? '1' : '0');
+}
+
+function _autoSync() {
+  if (_driveToken) saveToDrive();
+}
+
+function renderDriveSettings() {
+  const connected = !!_driveToken;
+  document.getElementById('driveNotConnected').style.display = connected ? 'none' : 'block';
+  document.getElementById('driveConnected').style.display = connected ? 'block' : 'none';
+  if (connected) {
+    document.getElementById('driveEmail').textContent = localStorage.getItem(DRV.EMAIL) || '';
+    document.getElementById('driveAutoSync').checked = localStorage.getItem(DRV.AUTO) === '1';
+    renderDriveLastSync();
+  }
+}
+
+function renderDriveLastSync() {
+  const el = document.getElementById('driveLastSync');
+  if (!el) return;
+  const ts = localStorage.getItem(DRV.LAST);
+  if (!ts) { el.textContent = 'Never synced'; return; }
+  const d = new Date(ts);
+  const isToday = d.toDateString() === new Date().toDateString();
+  el.textContent = 'Last synced: ' + (isToday ? 'today' : d.toLocaleDateString()) +
+    ' at ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function updateSyncCloud(status) {
+  const el = document.getElementById('syncCloud');
+  if (!el) return;
+  const s = status || (_driveToken ? 'synced' : 'grey');
+  const colors = { grey: '#9ca3af', syncing: '#f59e0b', synced: '#10b981', error: '#ef4444' };
+  const titles = { grey: 'Google Drive: not connected', syncing: 'Syncing…', synced: 'Google Drive: synced', error: 'Sync error — tap to open Settings' };
+  el.style.color = colors[s] || colors.grey;
+  el.title = titles[s] || '';
+}
+
+function showDriveMsg(text, type) {
+  const el = document.getElementById('driveSyncMsg');
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = type === 'success' ? 'var(--income)' : 'var(--expense)';
+  if (type !== 'error') setTimeout(() => { if (el) el.textContent = ''; }, 4000);
+}
+
+function _driveError(msg) {
+  updateSyncCloud('error');
+  showDriveMsg(msg, 'error');
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────
+init();
+</script>
+
+<div id="editModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:16px">
+  <div class="card" style="width:100%;max-width:420px;max-height:90vh;overflow-y:auto">
+    <div class="card-title">Edit Transaction</div>
+    <div class="form-group">
+      <label>Amount</label>
+      <input type="number" id="editAmt" step="0.01" min="0">
+    </div>
+    <div class="form-group">
+      <label>Type</label>
+      <select id="editType">
+        <option value="expense">Expense</option>
+        <option value="income">Income</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Category</label>
+      <select id="editCat"></select>
+    </div>
+    <div class="form-group">
+      <label>Wallet</label>
+      <select id="editWallet">
+        <option value="Cash">Cash</option>
+        <option value="Cash savings">Cash savings</option>
+        <option value="Investments">Investments</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Note</label>
+      <input type="text" id="editNote">
+    </div>
+    <div class="form-group">
+      <label>Transaction date</label>
+      <input type="date" id="editDate">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-success" style="flex:1" onclick="saveEdit()">Save</button>
+      <button class="btn btn-outline" style="flex:1" onclick="closeEdit()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Drive: restore complete confirmation -->
+<div id="driveRestoreModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1003;align-items:center;justify-content:center;padding:16px">
+  <div class="card" style="width:100%;max-width:360px;text-align:center">
+    <div style="font-size:2rem;margin-bottom:8px">✅</div>
+    <div class="card-title">Restore Complete</div>
+    <p style="font-size:.9rem;color:var(--text2);margin-bottom:16px"><strong id="driveRestoreCount">0</strong> transactions loaded from Google Drive.</p>
+    <button class="btn btn-success" style="width:100%" onclick="_driveRestoreReload()">Reload App</button>
+  </div>
+</div>
+
+<!-- Drive: restore-or-overwrite choice modal -->
+<div id="driveConnectModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1002;align-items:center;justify-content:center;padding:16px">
+  <div class="card" style="width:100%;max-width:380px">
+    <div class="card-title">Backup Found on Google Drive</div>
+    <p style="font-size:.9rem;color:var(--text2);margin-bottom:16px">An existing backup was found on Google Drive. What would you like to do?</p>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-success" style="flex:1" onclick="_driveConnectRestore()">↓ Restore from Drive</button>
+      <button class="btn btn-outline" style="flex:1" onclick="_driveConnectOverwrite()">↑ Overwrite with Local</button>
+    </div>
+  </div>
+</div>
+
+<!-- Drive: cross-device password modal -->
+<div id="drivePwModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1002;align-items:center;justify-content:center;padding:16px">
+  <div class="card" style="width:100%;max-width:380px">
+    <div class="card-title">Enter App Password</div>
+    <p style="font-size:.85rem;color:var(--text2);margin-bottom:12px">This backup was created on another device. Enter your app password to decrypt it.</p>
+    <div class="form-group" style="margin-bottom:10px">
+      <input type="password" id="drivePwModalInput" placeholder="Your app password" onkeydown="if(event.key==='Enter')drivePwSubmit()">
+    </div>
+    <div id="drivePwModalMsg" style="font-size:.82rem;color:var(--expense);min-height:16px;margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-success" style="flex:1" onclick="drivePwSubmit()">Decrypt &amp; Restore</button>
+      <button class="btn btn-outline" style="flex:1" onclick="drivePwCancel()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js')
+      .then(reg => console.log('Service worker registered, scope:', reg.scope))
+      .catch(err => console.log('Service worker registration failed:', err));
+  });
+}
+</script>
+</body>
+</html>
